@@ -2,7 +2,7 @@
     <hr>
     <img src="./.assets/icon.png" height="200" alt="Shirayuki">
     <h1>Shirayuki</h1>
-    <b>一个为了更方便的（bushi）去 BikaACG (PicaComic) 打造的第三方 iOS 客户端</b>
+    <b>一个为了更方便的（bushi）去 PicACG (BikaComic, aka 哔咔漫画) 打造的第三方 iOS 客户端</b>
 </div>
 
 <br>
@@ -19,7 +19,7 @@
 
 # 介绍
 
-**Shirayuki** 是一个基于 `SwiftUI + WKWebView` 构建的第三方 iOS 漫画客户端，目标是在不改动 Bika (哔咔漫画) 后端的前提下，用原生界面和交互去接管移动端网页体验。
+**Shirayuki** 是一个基于 `SwiftUI + WKWebView` 构建的第三方 iOS 漫画客户端，目标是在不改动哔咔漫画网页的前提下，用原生界面和交互去接管移动端网页体验。
 
 为什么要设计这个呢？首先是练手，其次是 *luguanluguanlulushijiandaole*。
 
