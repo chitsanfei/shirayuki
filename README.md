@@ -11,7 +11,7 @@
     <a href="https://github.com/chitsanfei/shirayuki/issues"><img src="https://img.shields.io/github/issues/chitsanfei/shirayuki"></a>
     <a href="https://github.com/chitsanfei/shirayuki/forks"><img src="https://img.shields.io/github/forks/chitsanfei/shirayuki"></a>
     <a href="https://github.com/chitsanfei/shirayuki"><img src="https://img.shields.io/github/stars/chitsanfei/shirayuki"></a>
-    <a href="https://github.com/chitsanfei/shirayuki/blob/main/LICENSE"><img src="https://img.shields.io/github/license/chitsanfei/shirayuki"></a>
+    <a href="https://github.com/chitsanfei/shirayuki/blob/master/LICENSE"><img src="https://img.shields.io/github/license/chitsanfei/shirayuki"></a>
     <a href="https://github.com/chitsanfei/shirayuki"><img src="https://img.shields.io/github/commit-activity/t/chitsanfei/shirayuki"></a>
 </p>
 
