@@ -81,7 +81,7 @@ struct ContentView: View {
                 .transition(.scale(scale: 0.92).combined(with: .opacity))
             }
 
-            if store.isLoading {
+            if store.isLoading && !store.isInReader {
                 ProgressView()
                     .tint(.white)
                     .padding(10)

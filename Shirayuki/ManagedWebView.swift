@@ -39,12 +39,19 @@ struct ManagedWebView: UIViewRepresentable {
                 self.store.isLoading = false
                 self.store.lastErrorMessage = nil
             }
-            store.reapplyCurrentSettingsIfNeeded()
+            store.reapplyCurrentSettingsIfNeeded(retryDelays: [0.35, 1.1, 2.0])
             store.refreshLoginState()
             store.syncPathFromURL(webView.url)
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            let nsError = error as NSError
+            if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
+                DispatchQueue.main.async {
+                    self.store.isLoading = false
+                }
+                return
+            }
             DispatchQueue.main.async {
                 self.store.isLoading = false
                 self.store.lastErrorMessage = "加载失败：\((error as NSError).code) \(error.localizedDescription)"
@@ -52,6 +59,13 @@ struct ManagedWebView: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            let nsError = error as NSError
+            if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
+                DispatchQueue.main.async {
+                    self.store.isLoading = false
+                }
+                return
+            }
             DispatchQueue.main.async {
                 self.store.isLoading = false
                 self.store.lastErrorMessage = "连接失败：\((error as NSError).code) \(error.localizedDescription)"
@@ -73,6 +87,7 @@ struct ManagedWebView: UIViewRepresentable {
                 }
             } else if type == "startReadingTap" {
                 DispatchQueue.main.async {
+                    self.store.isLoading = true
                     self.store.lastErrorMessage = nil
                 }
             }
