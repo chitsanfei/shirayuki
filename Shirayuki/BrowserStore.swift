@@ -1,12 +1,41 @@
 import Foundation
 import WebKit
 import Combine
+import SwiftUI
 
-struct WebRuntimeSettings {
-    var darkModeEnabled: Bool
-    var videoBlockEnabled: Bool
+enum DarkModeOption: String, CaseIterable, Identifiable {
+    case system = "system"
+    case light = "light"
+    case dark = "dark"
+    
+    var id: String { rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .system: return "跟随系统"
+        case .light: return "日间模式"
+        case .dark: return "暗夜模式"
+        }
+    }
 }
 
+struct WebRuntimeSettings {
+    var darkModeOption: DarkModeOption
+    var videoBlockEnabled: Bool
+    
+    var isDarkModeEnabled: Bool {
+        switch darkModeOption {
+        case .system:
+            return UITraitCollection.current.userInterfaceStyle == .dark
+        case .light:
+            return false
+        case .dark:
+            return true
+        }
+    }
+}
+
+@MainActor
 final class BrowserStore: NSObject, ObservableObject {
     @Published var isLoggedIn = false
     @Published var isInReader = false
@@ -58,12 +87,47 @@ final class BrowserStore: NSObject, ObservableObject {
     func apply(settings: WebRuntimeSettings) {
         currentSettings = settings
         hasAppliedRuntimeSettings = true
-        let backgroundColor: UIColor = settings.darkModeEnabled ? .black : .systemBackground
+        let isDark = settings.isDarkModeEnabled
+        let backgroundColor: UIColor = isDark ? .black : .systemBackground
         webView.backgroundColor = backgroundColor
         webView.scrollView.backgroundColor = backgroundColor
+        
+        // 未登录模式下不对网页进行任何修改
+        guard isLoggedIn else { return }
+        
+        // 应用网页原生暗黑模式 - 使用 color-scheme 和 prefers-color-scheme
+        webView.evaluateJavaScript("""
+        (function() {
+            const isDark = \(isDark ? "true" : "false");
+            const darkOption = "\(settings.darkModeOption.rawValue)";
+            
+            // 设置 color-scheme，让网页使用原生暗黑样式
+            document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+            
+            // 设置 meta theme-color
+            let metaTheme = document.querySelector('meta[name="theme-color"]');
+            if (!metaTheme) {
+                metaTheme = document.createElement('meta');
+                metaTheme.name = 'theme-color';
+                document.head.appendChild(metaTheme);
+            }
+            metaTheme.content = isDark ? '#1a1a1a' : '#ED97B7';
+            
+            // 设置 data-mode 属性供网页 CSS 使用
+            document.documentElement.setAttribute('data-mode', isDark ? 'dark' : 'light');
+            
+            // 存储设置到 localStorage 供网页读取
+            try {
+                localStorage.setItem('shirayuki-theme-mode', darkOption);
+                localStorage.setItem('shirayuki-dark-enabled', isDark ? '1' : '0');
+            } catch(e) {}
+            
+            return { isDark: isDark, option: darkOption };
+        })();
+        """)
 
         webView.evaluateJavaScript("""
-        window.__shirayukiDarkModeEnabled = \(settings.darkModeEnabled ? "true" : "false");
+        window.__shirayukiDarkModeEnabled = \(isDark ? "true" : "false");
         window.__shirayukiVideoBlockEnabled = \(settings.videoBlockEnabled ? "true" : "false");
         window.__shirayukiApplyNativeTweaks && window.__shirayukiApplyNativeTweaks();
         """)
@@ -71,11 +135,10 @@ final class BrowserStore: NSObject, ObservableObject {
         // Lightweight fallback: one-shot style upsert without mutation loops.
         webView.evaluateJavaScript("""
         (function() {
-          const darkEnabled = \(settings.darkModeEnabled ? "true" : "false");
+          const darkEnabled = \(isDark ? "true" : "false");
           const pathLower = (window.location.pathname || '').toLowerCase();
           const isReader = pathLower.includes('/comic/reader/');
-          const isAuthRoute = pathLower === '/' ||
-            pathLower.includes('/login') ||
+          const isAuthRoute = pathLower.includes('/login') ||
             pathLower.includes('/register') ||
             pathLower.includes('/signin') ||
             pathLower.includes('/signup');
@@ -106,31 +169,23 @@ final class BrowserStore: NSObject, ObservableObject {
               min-height: 0 !important;
               max-height: 0 !important;
             }
+            /* 隐藏网页返回按钮 - App 返回使用原生 webView.goBack() */
+            header [class*="back"]:not([data-shirayuki-app]),
+            header [class*="Back"]:not([data-shirayuki-app]),
+            .header-back,
+            .nav-back,
+            .page-back,
+            header [aria-label*="back" i]:not([data-shirayuki-app]),
+            header [title*="back" i]:not([data-shirayuki-app]),
+            header [aria-label*="返回" i]:not([data-shirayuki-app]),
+            header [title*="返回" i]:not([data-shirayuki-app]),
+            /* 隐藏搜索和菜单按钮 */
             header [aria-label*="search" i],
             header [title*="search" i],
-            header [aria-label*="back" i],
-            header [title*="back" i],
             header [aria-label*="menu" i],
             header [title*="menu" i],
             header [aria-label*="more" i],
             header [title*="more" i],
-            [class*="header"] [aria-label*="search" i],
-            [class*="header"] [aria-label*="menu" i],
-            [class*="header"] [aria-label*="more" i],
-            [class*="header"] [title*="search" i],
-            [class*="header"] [aria-label*="back" i],
-            [class*="header"] [title*="back" i],
-            [class*="header"] [title*="menu" i],
-            [class*="header"] [title*="more" i],
-            [class*="top"] [aria-label*="search" i],
-            [class*="top"] [aria-label*="menu" i],
-            [class*="top"] [aria-label*="more" i],
-            [class*="top"] [title*="search" i],
-            [class*="top"] [aria-label*="back" i],
-            [class*="top"] [title*="back" i],
-            [class*="top"] [title*="menu" i],
-            [class*="top"] [title*="more" i],
-            [class*="back-button"],
             [class*="search-button"],
             [class*="menu-button"],
             [class*="more-button"],
@@ -145,25 +200,10 @@ final class BrowserStore: NSObject, ObservableObject {
             body { padding-bottom: 0 !important; }
           `);
 
-          if (!isReader && !isAuthRoute && darkEnabled) {
-            upsertStyle('__shirayukiForceDark', `
-              html, body, #root, #app, #__next, main, .app, .container, .layout, .page, .content, .wrapper {
-                background: #0f1117 !important;
-                background-color: #0f1117 !important;
-                color: #dce3ee !important;
-                margin: 0 !important;
-                min-height: 100vh !important;
-              }
-              body, #root, #app, #__next { overflow-x: hidden !important; }
-              body *:not(img):not(svg):not(picture):not(canvas):not(video):not(source):not(path):not(use) {
-                background-color: #121621 !important;
-                color: #dce3ee !important;
-                border-color: rgba(220, 227, 238, 0.18) !important;
-              }
-            `);
-          } else {
-            removeStyle('__shirayukiForceDark');
-          }
+          // 使用原生 color-scheme 暗黑模式，不再强制覆盖样式
+          // 网页会根据 document.documentElement.style.colorScheme 自动适配
+          // 移除旧的强制暗黑样式（如果存在）
+          removeStyle('__shirayukiForceDark');
         })();
         """)
     }
@@ -196,7 +236,7 @@ final class BrowserStore: NSObject, ObservableObject {
     func refreshLoginState() {
         webView.evaluateJavaScript("(function(){ return !!localStorage.getItem('token'); })();") { [weak self] result, _ in
             guard let loggedIn = result as? Bool else { return }
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.isLoggedIn = loggedIn
             }
         }
@@ -219,41 +259,81 @@ final class BrowserStore: NSObject, ObservableObject {
     }
 
     func exitReader() {
+        // 直接尝试 WebView 的 goBack
+        webView.goBack()
+    }
+    
+    func enterReaderMode() {
+        // 进入阅读器时自动启用阅读模式
         webView.evaluateJavaScript("""
         (function() {
-          if (window.history.length > 1) {
-            window.history.back();
-            return true;
-          }
-          return false;
-        })();
-        """) { [weak self] result, _ in
-            let didBack = (result as? Bool) ?? false
-            if !didBack {
-                self?.navigate(to: .home)
+            // 触发阅读器全屏模式
+            try {
+                // 尝试触发网页的阅读模式按钮
+                const readModeBtn = document.querySelector('[class*="reader"][class*="mode"], [class*="read-mode"], [class*="fullscreen"]');
+                if (readModeBtn && readModeBtn.offsetParent !== null) {
+                    readModeBtn.click();
+                    return 'reader-mode-clicked';
+                }
+                
+                // 尝试通过键盘快捷键触发
+                const event = new KeyboardEvent('keydown', {
+                    key: 'f',
+                    code: 'KeyF',
+                    ctrlKey: false,
+                    shiftKey: false,
+                    altKey: false,
+                    metaKey: false
+                });
+                document.dispatchEvent(event);
+                
+                // 隐藏阅读器中的 UI 元素
+                const hideSelectors = [
+                    'header',
+                    'nav',
+                    '.header',
+                    '.nav',
+                    '.top-bar',
+                    '.toolbar',
+                    '.controls',
+                    '[class*="header"]',
+                    '[class*="toolbar"]',
+                    '[class*="control"]'
+                ];
+                
+                hideSelectors.forEach(selector => {
+                    document.querySelectorAll(selector).forEach(el => {
+                        if (el.offsetParent !== null) {
+                            el.style.setProperty('display', 'none', 'important');
+                        }
+                    });
+                });
+                
+                // 尝试全屏
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                }
+                
+                return 'reader-mode-applied';
+            } catch(e) {
+                return 'error: ' + e.message;
             }
-        }
+        })();
+        """)
     }
 
     func goBack() {
-        if webView.canGoBack {
-            webView.goBack()
+        // 获取当前路径
+        let currentPath = ReaderRoute.normalized(webView.url?.path ?? "/")
+        
+        // 如果已经在首页，无需操作
+        if currentPath == "/" {
+            selectedTab = .home
             return
         }
-
-        webView.evaluateJavaScript("""
-        (function() {
-          if (typeof window.__shirayukiGoBack === 'function') {
-            return window.__shirayukiGoBack();
-          }
-          return 'none';
-        })();
-        """) { [weak self] result, _ in
-            let mode = (result as? String) ?? "none"
-            if mode == "none" {
-                self?.navigate(to: .home)
-            }
-        }
+        
+        // 直接尝试 WebView 的 goBack
+        webView.goBack()
     }
 
     func clearCache(completion: @escaping (Result<Void, Error>) -> Void) {
@@ -283,7 +363,8 @@ final class BrowserStore: NSObject, ObservableObject {
         (function() {
           if (window.__shirayukiInjected) return;
           window.__shirayukiInjected = true;
-          window.__shirayukiDarkModeEnabled = \(settings.darkModeEnabled ? "true" : "false");
+          window.__shirayukiDarkModeEnabled = \(settings.isDarkModeEnabled ? "true" : "false");
+        window.__shirayukiDarkModeOption = "\(settings.darkModeOption.rawValue)";
           window.__shirayukiVideoBlockEnabled = \(settings.videoBlockEnabled ? "true" : "false");
 
           const navWords = ['主頁', '主页', '分类', '遊戲', '游戏', '個人中心', '个人中心', '功能', 'categories', 'profile', 'home', 'search', '首页', '我的'];
@@ -403,10 +484,19 @@ final class BrowserStore: NSObject, ObservableObject {
                   min-height: 0 !important;
                   max-height: 0 !important;
                 }
-                header [aria-label*="search" i],
-                header [title*="search" i],
+                /* 隐藏网页返回按钮 */
+                header [class*="back"],
+                header [class*="Back"],
+                .header-back,
+                .nav-back,
+                .page-back,
                 header [aria-label*="back" i],
                 header [title*="back" i],
+                header [aria-label*="返回" i],
+                header [title*="返回" i],
+                /* 隐藏搜索和菜单按钮 */
+                header [aria-label*="search" i],
+                header [title*="search" i],
                 header [aria-label*="menu" i],
                 header [title*="menu" i],
                 header [aria-label*="more" i],
@@ -415,19 +505,14 @@ final class BrowserStore: NSObject, ObservableObject {
                 [class*="header"] [aria-label*="menu" i],
                 [class*="header"] [aria-label*="more" i],
                 [class*="header"] [title*="search" i],
-                [class*="header"] [aria-label*="back" i],
-                [class*="header"] [title*="back" i],
                 [class*="header"] [title*="menu" i],
                 [class*="header"] [title*="more" i],
                 [class*="top"] [aria-label*="search" i],
                 [class*="top"] [aria-label*="menu" i],
                 [class*="top"] [aria-label*="more" i],
                 [class*="top"] [title*="search" i],
-                [class*="top"] [aria-label*="back" i],
-                [class*="top"] [title*="back" i],
                 [class*="top"] [title*="menu" i],
                 [class*="top"] [title*="more" i],
-                [class*="back-button"],
                 [class*="search-button"],
                 [class*="menu-button"],
                 [class*="more-button"],
@@ -447,50 +532,37 @@ final class BrowserStore: NSObject, ObservableObject {
             }
           };
 
+          // 隐藏网页返回按钮，但 App 返回功能仍可用
+          const hideWebBackButtons = () => {
+            // 精确选择器：只隐藏顶部的返回按钮，不影响 App 功能
+            const backSelectors = [
+              'header [class*="back"]',
+              'header [class*="Back"]',
+              '.header-back',
+              '.nav-back', 
+              '.page-back',
+              'header [aria-label*="back" i]',
+              'header [aria-label*="返回" i]',
+              'header [title*="back" i]',
+              'header [title*="返回" i]'
+            ];
+            
+            backSelectors.forEach(selector => {
+              document.querySelectorAll(selector).forEach(el => {
+                // 检查是否是 App 的元素（通过 data 属性标记）
+                if (el.hasAttribute('data-shirayuki-app')) return;
+                
+                el.style.setProperty('display', 'none', 'important');
+                el.style.setProperty('visibility', 'hidden', 'important');
+                el.style.setProperty('pointer-events', 'none', 'important');
+                el.style.setProperty('opacity', '0', 'important');
+                el.setAttribute('data-shirayuki-hidden', '1');
+              });
+            });
+          };
+          
           window.__shirayukiGoBack = () => {
-            const clickBackCandidate = () => {
-              const candidates = Array.from(document.querySelectorAll('a, button, [role="button"]'));
-              const scored = candidates
-                .map((el) => {
-                  const rect = el.getBoundingClientRect?.();
-                  if (!rect || rect.width <= 0 || rect.height <= 0 || rect.top > 160) return null;
-                  const text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
-                  const meta = `${el.id || ''} ${(el.className || '').toString()}`.toLowerCase();
-                  const href = (el.getAttribute?.('href') || '').toLowerCase();
-                  const hasBackHint =
-                    text.includes('返回') ||
-                    text.includes('back') ||
-                    text.includes('go back') ||
-                    text.includes('上一页') ||
-                    meta.includes('back') ||
-                    meta.includes('chevron-left') ||
-                    meta.includes('arrow-left');
-                  if (!hasBackHint) return null;
-
-                  let score = 0;
-                  if (rect.left <= 96) score += 4;
-                  if (rect.top <= 96) score += 4;
-                  if (rect.width <= 88 && rect.height <= 88) score += 2;
-                  if (el.querySelector?.('svg,i,img')) score += 2;
-                  if (href.startsWith('/')) score += 1;
-                  return { el, score };
-                })
-                .filter(Boolean)
-                .sort((a, b) => b.score - a.score);
-
-              const target = scored[0]?.el;
-              if (target) {
-                target.click();
-                return 'dom';
-              }
-              return null;
-            };
-
-            const domResult = clickBackCandidate();
-            if (domResult) {
-              return domResult;
-            }
-
+            // 优先使用 history.back()
             try {
               if (window.history.length > 1) {
                 window.history.back();
@@ -502,16 +574,6 @@ final class BrowserStore: NSObject, ObservableObject {
               if (window.navigation && typeof window.navigation.back === 'function') {
                 window.navigation.back();
                 return 'navigation';
-              }
-            } catch (e) {}
-
-            try {
-              if (document.referrer) {
-                const referrer = new URL(document.referrer, window.location.origin);
-                if (referrer.origin === window.location.origin) {
-                  window.location.assign(referrer.pathname + referrer.search + referrer.hash);
-                  return 'referrer';
-                }
               }
             } catch (e) {}
 
@@ -529,79 +591,25 @@ final class BrowserStore: NSObject, ObservableObject {
           };
 
           const applyDarkMode = () => {
-            const id = '__shirayukiDarkStyle';
-            let style = document.getElementById(id);
-            if (!window.__shirayukiDarkModeEnabled || isAuthRoute()) {
-              if (style) style.remove();
-              try {
-                document.documentElement.style.removeProperty('background');
-                document.documentElement.style.removeProperty('background-color');
-                document.body.style.removeProperty('background');
-                document.body.style.removeProperty('background-color');
-                document.documentElement.style.removeProperty('color');
-                document.body.style.removeProperty('color');
-              } catch (e) {}
-              return;
-            }
-
-            if (!style) {
-              style = document.createElement('style');
-              style.id = id;
-              document.head.appendChild(style);
-            }
-
-            style.textContent = `
-              html, body, #root, #app, #__next, main, .app, .container, .layout, .page, .content, .wrapper {
-                background: #0f1117 !important;
-                background-color: #0f1117 !important;
-                color: #dce3ee !important;
-              }
-              html, body { margin: 0 !important; min-height: 100vh !important; }
-              body, #root, #app, #__next { overflow-x: hidden !important; }
-              body *:not(img):not(svg):not(picture):not(canvas):not(video):not(source):not(path):not(use) {
-                background: #121621 !important;
-                background-color: #121621 !important;
-                color: #dce3ee !important;
-                border-color: rgba(220, 227, 238, 0.18) !important;
-              }
-              img, picture, canvas, svg { filter: none !important; }
-            `;
-
-            // Extra hard-set for pages that re-hydrate and override class-based styles.
+            // 使用原生 color-scheme 暗黑模式
+            const isDark = window.__shirayukiDarkModeEnabled === true;
+            const darkOption = window.__shirayukiDarkModeOption || 'system';
+            
+            // 设置 color-scheme 让浏览器和网页使用原生暗黑样式
+            document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+            
+            // 设置 data-mode 属性供网页 CSS 使用
+            document.documentElement.setAttribute('data-mode', isDark ? 'dark' : 'light');
+            
+            // 存储设置
             try {
-              document.documentElement.style.setProperty('background', '#0f1117', 'important');
-              document.documentElement.style.setProperty('background-color', '#0f1117', 'important');
-              document.body.style.setProperty('background', '#0f1117', 'important');
-              document.body.style.setProperty('background-color', '#0f1117', 'important');
-              document.documentElement.style.setProperty('color', '#dce3ee', 'important');
-              document.body.style.setProperty('color', '#dce3ee', 'important');
-
-              // Force-dark top-level containers where SPA routes often rehydrate.
-              const roots = [
-                document.getElementById('root'),
-                document.getElementById('app'),
-                document.getElementById('__next'),
-                document.querySelector('main'),
-                document.querySelector('.app'),
-                document.querySelector('.container'),
-                document.querySelector('.layout'),
-                document.querySelector('.page'),
-                document.querySelector('.content'),
-                document.querySelector('.wrapper')
-              ].filter(Boolean);
-
-              roots.forEach((el) => {
-                el.style.setProperty('background', '#0f1117', 'important');
-                el.style.setProperty('background-color', '#0f1117', 'important');
-                el.style.setProperty('color', '#dce3ee', 'important');
-              });
-
-              document.querySelectorAll('body > div, body > main, body > section, body > article, body > nav, body > header, body > footer')
-                .forEach((el) => {
-                  el.style.setProperty('background', '#0f1117', 'important');
-                  el.style.setProperty('background-color', '#0f1117', 'important');
-                });
-            } catch (e) {}
+              localStorage.setItem('shirayuki-theme-mode', darkOption);
+              localStorage.setItem('shirayuki-dark-enabled', isDark ? '1' : '0');
+            } catch(e) {}
+            
+            // 移除旧的强制样式（如果存在）
+            const oldStyle = document.getElementById('__shirayukiDarkStyle');
+            if (oldStyle) oldStyle.remove();
           };
 
           const neutralizeVideo = (video) => {
@@ -676,7 +684,9 @@ final class BrowserStore: NSObject, ObservableObject {
           const isReaderRoute = () => pathLower().includes('/comic/reader/');
           const isAuthRoute = () => {
             const p = pathLower();
-            return p === '/' || p.includes('/login') || p.includes('/register') || p.includes('/signin') || p.includes('/signup');
+            // 只在登录/注册页面不应用暗黑模式
+            // 首页/根路径现在可以应用暗黑模式
+            return p.includes('/login') || p.includes('/register') || p.includes('/signin') || p.includes('/signup');
           };
           const isLoggedIn = () => {
             try {
@@ -686,9 +696,17 @@ final class BrowserStore: NSObject, ObservableObject {
             }
           };
 
+          let lastLoggedIn = isLoggedIn();
+          
           const syncLogin = () => {
             try {
               const loggedIn = isLoggedIn();
+              // 检测登录状态变化
+              if (loggedIn !== lastLoggedIn) {
+                lastLoggedIn = loggedIn;
+                // 状态变化时立即应用/取消修改
+                setTimeout(() => window.__shirayukiApplyNativeTweaks?.(), 100);
+              }
               window.webkit?.messageHandlers?.shirayukiBridge?.postMessage({ type: 'loginState', loggedIn });
             } catch (e) {}
           };
@@ -790,6 +808,14 @@ final class BrowserStore: NSObject, ObservableObject {
 
           window.__shirayukiApplyNativeTweaks = () => {
             syncPath();
+            
+            // 未登录模式下不对网站进行任何修改
+            if (!isLoggedIn()) {
+              return;
+            }
+            
+            // 隐藏网页返回按钮（App 返回功能不受影响）
+            hideWebBackButtons();
 
             if (isReaderRoute()) {
               clearShirayukiHiddenNodes();

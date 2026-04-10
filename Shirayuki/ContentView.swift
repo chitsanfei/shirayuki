@@ -1,12 +1,24 @@
 import SwiftUI
 
 struct ContentView: View {
-    @AppStorage("darkModeEnabled") private var darkModeEnabled = true
+    @AppStorage("darkModeOption") private var darkModeOption: DarkModeOption = .system
     @AppStorage("videoBlockEnabled") private var videoBlockEnabled = true
+    @Environment(\.colorScheme) private var systemColorScheme
 
     @StateObject private var store = BrowserStore(
-        settings: WebRuntimeSettings(darkModeEnabled: true, videoBlockEnabled: true)
+        settings: WebRuntimeSettings(darkModeOption: .system, videoBlockEnabled: true)
     )
+    
+    private var effectiveDarkModeEnabled: Bool {
+        switch darkModeOption {
+        case .system:
+            return systemColorScheme == .dark
+        case .light:
+            return false
+        case .dark:
+            return true
+        }
+    }
 
     @State private var showingSettings = false
     @State private var clearingCache = false
@@ -88,6 +100,7 @@ struct ContentView: View {
                     .background(.ultraThinMaterial, in: Capsule())
                     .padding(.top, 72)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .allowsHitTesting(false) // 不拦截点击事件
             }
 
             if let err = store.lastErrorMessage {
@@ -103,6 +116,7 @@ struct ContentView: View {
                     .opacity(statusPlateOpacity)
                     .fixedSize()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .allowsHitTesting(false) // 不拦截点击事件
             }
 
             if store.isLoggedIn && !store.isInReader {
@@ -110,8 +124,9 @@ struct ContentView: View {
                     store.goBack()
                 }
                 .padding(.leading, 16)
-                .padding(.top, 11)
+                .padding(.top, 11) // 和状态气泡的 .padding(.top, 10) 对齐
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .zIndex(100) // 确保在最上层
             }
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.82), value: store.isInReader)
@@ -119,8 +134,13 @@ struct ContentView: View {
             applyWebSettings()
             syncStatusPlateVisibility(for: currentStatus)
         }
-        .onChange(of: darkModeEnabled) { _, _ in
+        .onChange(of: darkModeOption) { _, _ in
             applyWebSettings()
+        }
+        .onChange(of: systemColorScheme) { _, _ in
+            if darkModeOption == .system {
+                applyWebSettings()
+            }
         }
         .onChange(of: videoBlockEnabled) { _, _ in
             applyWebSettings()
@@ -128,6 +148,15 @@ struct ContentView: View {
         .onChange(of: currentStatus) { _, _ in
             triggerStatusPulse()
             syncStatusPlateVisibility(for: currentStatus)
+        }
+        .onChange(of: store.isLoggedIn) { oldValue, newValue in
+            // 登录状态变化时重新应用设置
+            if !oldValue && newValue {
+                // 从未登录变为已登录，延迟应用设置确保页面已加载
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    applyWebSettings()
+                }
+            }
         }
         .sheet(isPresented: $showingSettings) {
             settingsView
@@ -177,7 +206,7 @@ struct ContentView: View {
     private var settingsView: some View {
         ShirayukiSettingsView(
             isPresented: $showingSettings,
-            darkModeEnabled: $darkModeEnabled,
+            darkModeOption: $darkModeOption,
             videoBlockEnabled: $videoBlockEnabled,
             clearingCache: clearingCache,
             cacheMessage: cacheMessage,
@@ -191,7 +220,7 @@ struct ContentView: View {
     private func applyWebSettings() {
         store.apply(
             settings: WebRuntimeSettings(
-                darkModeEnabled: darkModeEnabled,
+                darkModeOption: darkModeOption,
                 videoBlockEnabled: videoBlockEnabled
             )
         )

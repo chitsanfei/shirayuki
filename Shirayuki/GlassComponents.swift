@@ -41,6 +41,7 @@ struct BottomActionDock: View {
     @Namespace private var selectionNamespace
     @State private var lensActive = false
     @State private var dragMode = false
+    @Environment(\.colorScheme) private var colorScheme
 
     private var actions: [DockAction] {
         tabs.map { .tab($0) } + [.settings]
@@ -82,7 +83,7 @@ struct BottomActionDock: View {
                 } label: {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(selectedTab == .search ? .blue : .white.opacity(0.9))
+                        .foregroundStyle(foregroundColor(for: selectedTab == .search))
                         .frame(width: searchSize, height: searchSize)
                 }
                 .buttonStyle(.plain)
@@ -128,7 +129,7 @@ struct BottomActionDock: View {
                 }
                 .scaleEffect(selected ? (lensActive ? 1.12 : 1.04) : 1.0)
             }
-            .foregroundStyle(selected ? .blue : .white.opacity(0.88))
+            .foregroundStyle(foregroundColor(for: selected))
             .frame(height: itemHeight)
             .contentShape(.rect)
         }
@@ -257,6 +258,15 @@ struct BottomActionDock: View {
             onSelect(target)
         }
     }
+    
+    private func foregroundColor(for isSelected: Bool) -> Color {
+        if isSelected {
+            return .blue
+        } else {
+            // 根据系统颜色方案调整未选中状态的颜色
+            return colorScheme == .dark ? .white.opacity(0.88) : .black.opacity(0.7)
+        }
+    }
 }
 
 struct FloatingGlassButton: View {
@@ -286,10 +296,10 @@ struct TopBackButton: View {
             Image(systemName: "chevron.left")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
         }
         .buttonStyle(.plain)
-        .fixedSize()
+        .frame(width: 44, height: 44)
+        .contentShape(.circle)
         .glassEffect(.regular.interactive(), in: .circle)
         .accessibilityIdentifier("topBackButton")
     }

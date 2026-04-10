@@ -28,31 +28,37 @@ struct ManagedWebView: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.store.isLoading = true
                 self.store.lastErrorMessage = nil
             }
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.store.isLoading = false
                 self.store.lastErrorMessage = nil
+                self.store.reapplyCurrentSettingsIfNeeded(retryDelays: [0.35, 1.1, 2.0])
+                self.store.refreshLoginState()
+                self.store.syncPathFromURL(webView.url)
+                
+                // 如果当前在阅读器页面，确保进入阅读模式
+                if self.store.isInReader {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    self.store.enterReaderMode()
+                }
             }
-            store.reapplyCurrentSettingsIfNeeded(retryDelays: [0.35, 1.1, 2.0])
-            store.refreshLoginState()
-            store.syncPathFromURL(webView.url)
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             let nsError = error as NSError
             if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     self.store.isLoading = false
                 }
                 return
             }
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.store.isLoading = false
                 self.store.lastErrorMessage = "加载失败：\((error as NSError).code) \(error.localizedDescription)"
             }
@@ -61,12 +67,12 @@ struct ManagedWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             let nsError = error as NSError
             if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled {
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     self.store.isLoading = false
                 }
                 return
             }
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.store.isLoading = false
                 self.store.lastErrorMessage = "连接失败：\((error as NSError).code) \(error.localizedDescription)"
             }
@@ -78,15 +84,25 @@ struct ManagedWebView: UIViewRepresentable {
                   let type = body["type"] as? String else { return }
 
             if type == "loginState", let loggedIn = body["loggedIn"] as? Bool {
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     self.store.isLoggedIn = loggedIn
                 }
             } else if type == "pathChange", let path = body["path"] as? String {
-                DispatchQueue.main.async {
+                Task { @MainActor in
+                    let wasInReader = self.store.isInReader
                     self.store.syncPathFromPage(path)
+                    let isInReader = self.store.isInReader
+                    
+                    // 如果刚进入阅读器，自动启用阅读模式
+                    if !wasInReader && isInReader {
+                        Task {
+                            try? await Task.sleep(nanoseconds: 500_000_000)
+                            self.store.enterReaderMode()
+                        }
+                    }
                 }
             } else if type == "startReadingTap" {
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     self.store.isLoading = true
                     self.store.lastErrorMessage = nil
                 }
