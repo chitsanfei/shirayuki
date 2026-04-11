@@ -263,7 +263,7 @@ struct BottomActionDock: View {
         if isSelected {
             return .blue
         } else {
-            // 根据系统颜色方案调整未选中状态的颜色
+            
             return colorScheme == .dark ? .white.opacity(0.88) : .black.opacity(0.7)
         }
     }

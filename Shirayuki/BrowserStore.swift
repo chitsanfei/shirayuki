@@ -92,19 +92,16 @@ final class BrowserStore: NSObject, ObservableObject {
         webView.backgroundColor = backgroundColor
         webView.scrollView.backgroundColor = backgroundColor
         
-        // 未登录模式下不对网页进行任何修改
+        
         guard isLoggedIn else { return }
         
-        // 应用网页原生暗黑模式 - 使用 color-scheme 和 prefers-color-scheme
+        
         webView.evaluateJavaScript("""
         (function() {
             const isDark = \(isDark ? "true" : "false");
             const darkOption = "\(settings.darkModeOption.rawValue)";
             
-            // 设置 color-scheme，让网页使用原生暗黑样式
             document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
-            
-            // 设置 meta theme-color
             let metaTheme = document.querySelector('meta[name="theme-color"]');
             if (!metaTheme) {
                 metaTheme = document.createElement('meta');
@@ -112,11 +109,7 @@ final class BrowserStore: NSObject, ObservableObject {
                 document.head.appendChild(metaTheme);
             }
             metaTheme.content = isDark ? '#1a1a1a' : '#ED97B7';
-            
-            // 设置 data-mode 属性供网页 CSS 使用
             document.documentElement.setAttribute('data-mode', isDark ? 'dark' : 'light');
-            
-            // 存储设置到 localStorage 供网页读取
             try {
                 localStorage.setItem('shirayuki-theme-mode', darkOption);
                 localStorage.setItem('shirayuki-dark-enabled', isDark ? '1' : '0');
@@ -132,7 +125,7 @@ final class BrowserStore: NSObject, ObservableObject {
         window.__shirayukiApplyNativeTweaks && window.__shirayukiApplyNativeTweaks();
         """)
 
-        // Lightweight fallback: one-shot style upsert without mutation loops.
+        
         webView.evaluateJavaScript("""
         (function() {
           const darkEnabled = \(isDark ? "true" : "false");
@@ -169,7 +162,6 @@ final class BrowserStore: NSObject, ObservableObject {
               min-height: 0 !important;
               max-height: 0 !important;
             }
-            /* 隐藏网页返回按钮 - App 返回使用原生 webView.goBack() */
             header [class*="back"]:not([data-shirayuki-app]),
             header [class*="Back"]:not([data-shirayuki-app]),
             .header-back,
@@ -179,7 +171,6 @@ final class BrowserStore: NSObject, ObservableObject {
             header [title*="back" i]:not([data-shirayuki-app]),
             header [aria-label*="返回" i]:not([data-shirayuki-app]),
             header [title*="返回" i]:not([data-shirayuki-app]),
-            /* 隐藏搜索和菜单按钮 */
             header [aria-label*="search" i],
             header [title*="search" i],
             header [aria-label*="menu" i],
@@ -200,9 +191,6 @@ final class BrowserStore: NSObject, ObservableObject {
             body { padding-bottom: 0 !important; }
           `);
 
-          // 使用原生 color-scheme 暗黑模式，不再强制覆盖样式
-          // 网页会根据 document.documentElement.style.colorScheme 自动适配
-          // 移除旧的强制暗黑样式（如果存在）
           removeStyle('__shirayukiForceDark');
         })();
         """)
@@ -259,24 +247,21 @@ final class BrowserStore: NSObject, ObservableObject {
     }
 
     func exitReader() {
-        // 直接尝试 WebView 的 goBack
+        
         webView.goBack()
     }
     
     func enterReaderMode() {
-        // 进入阅读器时自动启用阅读模式
+        
         webView.evaluateJavaScript("""
         (function() {
-            // 触发阅读器全屏模式
             try {
-                // 尝试触发网页的阅读模式按钮
                 const readModeBtn = document.querySelector('[class*="reader"][class*="mode"], [class*="read-mode"], [class*="fullscreen"]');
                 if (readModeBtn && readModeBtn.offsetParent !== null) {
                     readModeBtn.click();
                     return 'reader-mode-clicked';
                 }
                 
-                // 尝试通过键盘快捷键触发
                 const event = new KeyboardEvent('keydown', {
                     key: 'f',
                     code: 'KeyF',
@@ -287,7 +272,6 @@ final class BrowserStore: NSObject, ObservableObject {
                 });
                 document.dispatchEvent(event);
                 
-                // 隐藏阅读器中的 UI 元素
                 const hideSelectors = [
                     'header',
                     'nav',
@@ -309,7 +293,6 @@ final class BrowserStore: NSObject, ObservableObject {
                     });
                 });
                 
-                // 尝试全屏
                 if (document.documentElement.requestFullscreen) {
                     document.documentElement.requestFullscreen().catch(() => {});
                 }
@@ -323,16 +306,16 @@ final class BrowserStore: NSObject, ObservableObject {
     }
 
     func goBack() {
-        // 获取当前路径
+        
         let currentPath = ReaderRoute.normalized(webView.url?.path ?? "/")
         
-        // 如果已经在首页，无需操作
+        
         if currentPath == "/" {
             selectedTab = .home
             return
         }
         
-        // 直接尝试 WebView 的 goBack
+        
         webView.goBack()
     }
 
@@ -393,7 +376,6 @@ final class BrowserStore: NSObject, ObservableObject {
           };
 
           const hideOriginalNav = () => {
-            // Site-specific: this is the exact mobile permanent tab bar.
             document.querySelectorAll('.mobile-permanent-nav').forEach((el) => hideNode(el));
             document.querySelectorAll('.mobile-permanent-nav .mobile-tab-item').forEach((el) => hideNode(el));
             document.querySelectorAll('a.mobile-tab-item').forEach((el) => hideNode(el));
@@ -484,7 +466,6 @@ final class BrowserStore: NSObject, ObservableObject {
                   min-height: 0 !important;
                   max-height: 0 !important;
                 }
-                /* 隐藏网页返回按钮 */
                 header [class*="back"],
                 header [class*="Back"],
                 .header-back,
@@ -494,7 +475,6 @@ final class BrowserStore: NSObject, ObservableObject {
                 header [title*="back" i],
                 header [aria-label*="返回" i],
                 header [title*="返回" i],
-                /* 隐藏搜索和菜单按钮 */
                 header [aria-label*="search" i],
                 header [title*="search" i],
                 header [aria-label*="menu" i],
@@ -532,9 +512,7 @@ final class BrowserStore: NSObject, ObservableObject {
             }
           };
 
-          // 隐藏网页返回按钮，但 App 返回功能仍可用
           const hideWebBackButtons = () => {
-            // 精确选择器：只隐藏顶部的返回按钮，不影响 App 功能
             const backSelectors = [
               'header [class*="back"]',
               'header [class*="Back"]',
@@ -549,7 +527,6 @@ final class BrowserStore: NSObject, ObservableObject {
             
             backSelectors.forEach(selector => {
               document.querySelectorAll(selector).forEach(el => {
-                // 检查是否是 App 的元素（通过 data 属性标记）
                 if (el.hasAttribute('data-shirayuki-app')) return;
                 
                 el.style.setProperty('display', 'none', 'important');
@@ -562,7 +539,6 @@ final class BrowserStore: NSObject, ObservableObject {
           };
           
           window.__shirayukiGoBack = () => {
-            // 优先使用 history.back()
             try {
               if (window.history.length > 1) {
                 window.history.back();
@@ -591,23 +567,16 @@ final class BrowserStore: NSObject, ObservableObject {
           };
 
           const applyDarkMode = () => {
-            // 使用原生 color-scheme 暗黑模式
             const isDark = window.__shirayukiDarkModeEnabled === true;
             const darkOption = window.__shirayukiDarkModeOption || 'system';
             
-            // 设置 color-scheme 让浏览器和网页使用原生暗黑样式
             document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
-            
-            // 设置 data-mode 属性供网页 CSS 使用
             document.documentElement.setAttribute('data-mode', isDark ? 'dark' : 'light');
-            
-            // 存储设置
             try {
               localStorage.setItem('shirayuki-theme-mode', darkOption);
               localStorage.setItem('shirayuki-dark-enabled', isDark ? '1' : '0');
             } catch(e) {}
             
-            // 移除旧的强制样式（如果存在）
             const oldStyle = document.getElementById('__shirayukiDarkStyle');
             if (oldStyle) oldStyle.remove();
           };
@@ -684,8 +653,6 @@ final class BrowserStore: NSObject, ObservableObject {
           const isReaderRoute = () => pathLower().includes('/comic/reader/');
           const isAuthRoute = () => {
             const p = pathLower();
-            // 只在登录/注册页面不应用暗黑模式
-            // 首页/根路径现在可以应用暗黑模式
             return p.includes('/login') || p.includes('/register') || p.includes('/signin') || p.includes('/signup');
           };
           const isLoggedIn = () => {
@@ -701,10 +668,8 @@ final class BrowserStore: NSObject, ObservableObject {
           const syncLogin = () => {
             try {
               const loggedIn = isLoggedIn();
-              // 检测登录状态变化
               if (loggedIn !== lastLoggedIn) {
                 lastLoggedIn = loggedIn;
-                // 状态变化时立即应用/取消修改
                 setTimeout(() => window.__shirayukiApplyNativeTweaks?.(), 100);
               }
               window.webkit?.messageHandlers?.shirayukiBridge?.postMessage({ type: 'loginState', loggedIn });
@@ -808,13 +773,9 @@ final class BrowserStore: NSObject, ObservableObject {
 
           window.__shirayukiApplyNativeTweaks = () => {
             syncPath();
-            
-            // 未登录模式下不对网站进行任何修改
             if (!isLoggedIn()) {
               return;
             }
-            
-            // 隐藏网页返回按钮（App 返回功能不受影响）
             hideWebBackButtons();
 
             if (isReaderRoute()) {

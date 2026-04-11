@@ -100,7 +100,7 @@ struct ContentView: View {
                     .background(.ultraThinMaterial, in: Capsule())
                     .padding(.top, 72)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .allowsHitTesting(false) // 不拦截点击事件
+                    .allowsHitTesting(false) 
             }
 
             if let err = store.lastErrorMessage {
@@ -116,7 +116,7 @@ struct ContentView: View {
                     .opacity(statusPlateOpacity)
                     .fixedSize()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .allowsHitTesting(false) // 不拦截点击事件
+                    .allowsHitTesting(false) 
             }
 
             if store.isLoggedIn && !store.isInReader {
@@ -124,9 +124,9 @@ struct ContentView: View {
                     store.goBack()
                 }
                 .padding(.leading, 16)
-                .padding(.top, 11) // 和状态气泡的 .padding(.top, 10) 对齐
+                .padding(.top, 11) 
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .zIndex(100) // 确保在最上层
+                .zIndex(100) 
             }
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.82), value: store.isInReader)
@@ -150,9 +150,9 @@ struct ContentView: View {
             syncStatusPlateVisibility(for: currentStatus)
         }
         .onChange(of: store.isLoggedIn) { oldValue, newValue in
-            // 登录状态变化时重新应用设置
+            
             if !oldValue && newValue {
-                // 从未登录变为已登录，延迟应用设置确保页面已加载
+                
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     applyWebSettings()
                 }

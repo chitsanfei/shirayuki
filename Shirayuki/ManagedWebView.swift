@@ -42,7 +42,7 @@ struct ManagedWebView: UIViewRepresentable {
                 self.store.refreshLoginState()
                 self.store.syncPathFromURL(webView.url)
                 
-                // 如果当前在阅读器页面，确保进入阅读模式
+                
                 if self.store.isInReader {
                     try? await Task.sleep(nanoseconds: 300_000_000)
                     self.store.enterReaderMode()
@@ -93,7 +93,7 @@ struct ManagedWebView: UIViewRepresentable {
                     self.store.syncPathFromPage(path)
                     let isInReader = self.store.isInReader
                     
-                    // 如果刚进入阅读器，自动启用阅读模式
+                    
                     if !wasInReader && isInReader {
                         Task {
                             try? await Task.sleep(nanoseconds: 500_000_000)
