@@ -72,16 +72,25 @@
 
 ## 许可证
 
-`Shirayuki` 采用 `MIT` 许可证进行开源。
+`Shirayuki` 采用 `GPL-3.0` 许可证进行开源。
 
 ```text
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
 ```
+
+## 参考与第三方说明
+
+- `haka_comic`
+  - 上游项目: https://github.com/raoxwup/haka_comic
+  - 上游许可证: `GPL-3.0`
+  - 当前用途: 仅作界面与交互设计参考。
+
+- Apple Liquid Glass
+  - 参考资料: https://developer.apple.com/documentation/SwiftUI/Landmarks-Building-an-app-with-Liquid-Glass
+  - 当前用途: 仅作视觉与动效设计参考。
+
+- 以上内容仅作设计参考。
 
 ## 相关链接
 
