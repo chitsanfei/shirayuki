@@ -1,4 +1,4 @@
-name: Conventional Commits
+name: Check Conventional Commits
 
 on:
   push:
@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   validate:
+    name: Check Conventional Commits
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -37,13 +38,13 @@ jobs:
           after="${{ github.sha }}"
 
           if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
-            bash .github/scripts/validate_conventional_commits.sh "$after"
+            bash ./.github/scripts/validate_conventional_commits.sh "$after"
           else
-            bash .github/scripts/validate_conventional_commits.sh "$before..$after"
+            bash ./.github/scripts/validate_conventional_commits.sh "$before..$after"
           fi
 
       - name: Validate pull request commit messages
         if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
-          bash .github/scripts/validate_conventional_commits.sh "origin/${{ github.base_ref }}..HEAD"
+          bash ./.github/scripts/validate_conventional_commits.sh "origin/${{ github.base_ref }}..HEAD"

@@ -1,4 +1,4 @@
-name: iOS Unsigned IPA
+name: Build iOS Unsigned IPA
 
 on:
   push:
@@ -14,13 +14,9 @@ concurrency:
 
 jobs:
   build-unsigned-ipa:
+    name: Build iOS Unsigned IPA
     runs-on: macos-latest
     timeout-minutes: 45
-    env:
-      APP_NAME: Shirayuki
-      DERIVED_DATA_PATH: ${{ runner.temp }}/DerivedData
-      ARCHIVE_PATH: ${{ runner.temp }}/Shirayuki.xcarchive
-      EXPORT_PATH: ${{ runner.temp }}/ShirayukiExport
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,21 +32,30 @@ jobs:
       - name: Archive unsigned app
         run: |
           set -euo pipefail
-          rm -rf "$DERIVED_DATA_PATH" "$ARCHIVE_PATH" "$EXPORT_PATH"
+          app_name="Shirayuki"
+          derived_data_path="$RUNNER_TEMP/DerivedData"
+          archive_path="$RUNNER_TEMP/Shirayuki.xcarchive"
+          export_path="$RUNNER_TEMP/ShirayukiExport"
+
+          rm -rf "$derived_data_path" "$archive_path" "$export_path"
 
           xcodebuild \
             -project Shirayuki.xcodeproj \
             -scheme Shirayuki \
             -configuration Release \
             -destination "generic/platform=iOS" \
-            -derivedDataPath "$DERIVED_DATA_PATH" \
-            -archivePath "$ARCHIVE_PATH" \
+            -derivedDataPath "$derived_data_path" \
+            -archivePath "$archive_path" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
             SKIP_INSTALL=NO \
             clean archive
+
+          echo "APP_NAME=$app_name" >> "$GITHUB_ENV"
+          echo "ARCHIVE_PATH=$archive_path" >> "$GITHUB_ENV"
+          echo "EXPORT_PATH=$export_path" >> "$GITHUB_ENV"
 
       - name: Package IPA artifact
         run: |

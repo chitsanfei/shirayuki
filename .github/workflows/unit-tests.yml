@@ -1,4 +1,4 @@
-name: Unit Tests
+name: Run Unit Tests
 
 on:
   push:
@@ -17,11 +17,9 @@ concurrency:
 
 jobs:
   unit-tests:
+    name: Run Unit Tests
     runs-on: macos-latest
     timeout-minutes: 45
-    env:
-      DERIVED_DATA_PATH: ${{ runner.temp }}/DerivedData
-      RESULT_BUNDLE_PATH: ${{ runner.temp }}/ShirayukiTests.xcresult
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,15 +55,18 @@ jobs:
       - name: Run unit tests
         run: |
           set -euo pipefail
-          rm -rf "$DERIVED_DATA_PATH" "$RESULT_BUNDLE_PATH"
+          derived_data_path="$RUNNER_TEMP/DerivedData"
+          result_bundle_path="$GITHUB_WORKSPACE/ShirayukiTests.xcresult"
+
+          rm -rf "$derived_data_path" "$result_bundle_path"
 
           xcodebuild \
             -project Shirayuki.xcodeproj \
             -scheme Shirayuki \
             -configuration Debug \
             -destination "${{ steps.simulator.outputs.destination }}" \
-            -derivedDataPath "$DERIVED_DATA_PATH" \
-            -resultBundlePath "$RESULT_BUNDLE_PATH" \
+            -derivedDataPath "$derived_data_path" \
+            -resultBundlePath "$result_bundle_path" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -77,5 +78,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Shirayuki-unit-tests-xcresult
-          path: ${{ runner.temp }}/ShirayukiTests.xcresult
+          path: ShirayukiTests.xcresult
           if-no-files-found: ignore
