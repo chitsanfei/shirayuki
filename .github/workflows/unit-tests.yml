@@ -34,22 +34,41 @@ jobs:
           fi
           xcodebuild -version
 
-      - name: Pick an available iPhone simulator
+      - name: Pick a compatible iPhone simulator
         id: simulator
         run: |
           set -euo pipefail
-          device_id="$(
-            xcrun simctl list devices available \
-              | grep -m 1 'iPhone' \
-              | sed -E 's/.*\(([0-9A-F-]+)\) \(.*/\1/'
+          destinations="$(
+            xcodebuild \
+              -project Shirayuki.xcodeproj \
+              -scheme Shirayuki \
+              -showdestinations
           )"
 
-          if [[ -z "$device_id" ]]; then
-            echo "No available iPhone simulator found."
-            xcrun simctl list devices available
+          destination_line="$(
+            printf '%s\n' "$destinations" \
+              | grep -m 1 -E '\{ platform:iOS Simulator, .*name:iPhone '
+          )"
+
+          if [[ -z "$destination_line" ]]; then
+            echo "No compatible iPhone simulator found for the Shirayuki scheme."
+            printf '%s\n' "$destinations"
             exit 1
           fi
 
+          device_id="$(
+            printf '%s\n' "$destination_line" \
+              | sed -E 's/.*id:([^,}]+).*/\1/' \
+              | tr -d ' '
+          )"
+
+          if [[ -z "$device_id" ]]; then
+            echo "Failed to parse a compatible simulator destination."
+            printf '%s\n' "$destinations"
+            exit 1
+          fi
+
+          echo "Using simulator destination: $destination_line"
           echo "destination=platform=iOS Simulator,id=$device_id" >> "$GITHUB_OUTPUT"
 
       - name: Run unit tests
