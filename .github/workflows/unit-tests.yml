@@ -34,7 +34,7 @@ jobs:
           fi
           xcodebuild -version
 
-      - name: Pick a compatible iPhone simulator
+      - name: Pick iPhone simulator
         id: simulator
         run: |
           set -euo pipefail
@@ -45,13 +45,27 @@ jobs:
               -showdestinations
           )"
 
-          destination_line="$(
-            printf '%s\n' "$destinations" \
-              | grep -m 1 -E '\{ platform:iOS Simulator, .*name:iPhone '
-          )"
+          destination_line=""
+          preferred_models=(
+            "iPhone 17"
+            "iPhone 16"
+            "iPhone 15"
+          )
+
+          for model in "${preferred_models[@]}"; do
+            candidate="$(
+              printf '%s\n' "$destinations" \
+                | grep -m 1 "name:${model}" || true
+            )"
+
+            if [[ -n "$candidate" ]]; then
+              destination_line="$candidate"
+              break
+            fi
+          done
 
           if [[ -z "$destination_line" ]]; then
-            echo "No compatible iPhone simulator found for the Shirayuki scheme."
+            echo "No compatible iPhone 15/16/17 simulator found for the Shirayuki scheme."
             printf '%s\n' "$destinations"
             exit 1
           fi
