@@ -90,13 +90,18 @@ jobs:
           echo "Falling back to creating a simulator via simctl."
           printf '%s\n' "$destinations"
 
+          simctl_list_json="$(xcrun simctl list -j devicetypes runtimes)"
+
           device_type_id=""
           for model in "${preferred_models[@]}"; do
             candidate="$(
-              xcrun simctl list devicetypes \
-                | grep -m 1 "^${model} (" \
-                | sed -E 's/^.*\(([^)]+)\).*$/\1/' \
-                || true
+              printf '%s' "$simctl_list_json" \
+                | /usr/bin/ruby -rjson -e '
+                    payload = JSON.parse(STDIN.read)
+                    model = ARGV[0]
+                    type = payload.fetch("devicetypes", []).find { |item| item["name"] == model }
+                    puts(type["identifier"]) if type && type["identifier"]
+                  ' "$model"
             )"
 
             if [[ -n "$candidate" ]]; then
@@ -108,22 +113,35 @@ jobs:
 
           if [[ -z "$device_type_id" || -z "$selected_model" ]]; then
             echo "No compatible iPhone 15/16/17 device type is available in this runner image."
-            xcrun simctl list devicetypes
+            printf '%s' "$simctl_list_json" \
+              | /usr/bin/ruby -rjson -e '
+                  payload = JSON.parse(STDIN.read)
+                  payload.fetch("devicetypes", []).each { |item| puts item["name"] }
+                '
             exit 1
           fi
 
           runtime_id="$(
-            xcrun simctl list runtimes available \
-              | grep '^iOS ' \
-              | grep -v unavailable \
-              | awk -F' - ' '{print $2}' \
-              | tail -n 1 \
-              || true
+            printf '%s' "$simctl_list_json" \
+              | /usr/bin/ruby -rjson -e '
+                  payload = JSON.parse(STDIN.read)
+                  runtimes = payload.fetch("runtimes", []).select do |item|
+                    item["isAvailable"] == true && item["name"].to_s.start_with?("iOS")
+                  end
+                  runtime = runtimes.max_by { |item| item["version"].to_s }
+                  puts(runtime["identifier"]) if runtime && runtime["identifier"]
+                '
           )"
 
           if [[ -z "$runtime_id" ]]; then
             echo "No available iOS simulator runtime was found for the selected Xcode."
-            xcrun simctl list runtimes available
+            printf '%s' "$simctl_list_json" \
+              | /usr/bin/ruby -rjson -e '
+                  payload = JSON.parse(STDIN.read)
+                  payload.fetch("runtimes", []).each do |item|
+                    puts "#{item["name"]} | #{item["identifier"]} | available=#{item["isAvailable"]}"
+                  end
+                '
             exit 1
           fi
 
