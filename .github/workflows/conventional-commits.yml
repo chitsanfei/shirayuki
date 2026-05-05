@@ -1,0 +1,49 @@
+name: Conventional Commits
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conventional-commits-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        if: github.event_name == 'pull_request'
+        run: git fetch origin "${{ github.base_ref }}" --no-tags --depth=1
+
+      - name: Validate pushed commit messages
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          before="${{ github.event.before }}"
+          after="${{ github.sha }}"
+
+          if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
+            bash .github/scripts/validate_conventional_commits.sh "$after"
+          else
+            bash .github/scripts/validate_conventional_commits.sh "$before..$after"
+          fi
+
+      - name: Validate pull request commit messages
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          bash .github/scripts/validate_conventional_commits.sh "origin/${{ github.base_ref }}..HEAD"

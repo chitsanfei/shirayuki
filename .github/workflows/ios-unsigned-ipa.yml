@@ -1,0 +1,70 @@
+name: iOS Unsigned IPA
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-unsigned-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-unsigned-ipa:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      APP_NAME: Shirayuki
+      DERIVED_DATA_PATH: ${{ runner.temp }}/DerivedData
+      ARCHIVE_PATH: ${{ runner.temp }}/Shirayuki.xcarchive
+      EXPORT_PATH: ${{ runner.temp }}/ShirayukiExport
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: |
+          set -euo pipefail
+          if [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
+            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          fi
+          xcodebuild -version
+
+      - name: Archive unsigned app
+        run: |
+          set -euo pipefail
+          rm -rf "$DERIVED_DATA_PATH" "$ARCHIVE_PATH" "$EXPORT_PATH"
+
+          xcodebuild \
+            -project Shirayuki.xcodeproj \
+            -scheme Shirayuki \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -archivePath "$ARCHIVE_PATH" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            SKIP_INSTALL=NO \
+            clean archive
+
+      - name: Package IPA artifact
+        run: |
+          set -euo pipefail
+          mkdir -p "$EXPORT_PATH/Payload"
+          cp -R "$ARCHIVE_PATH/Products/Applications/$APP_NAME.app" "$EXPORT_PATH/Payload/"
+          (
+            cd "$EXPORT_PATH"
+            /usr/bin/zip -qry "$GITHUB_WORKSPACE/$APP_NAME-unsigned.ipa" Payload
+          )
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shirayuki-unsigned-ipa
+          path: Shirayuki-unsigned.ipa
+          if-no-files-found: error

@@ -1,0 +1,81 @@
+name: Unit Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unit-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      DERIVED_DATA_PATH: ${{ runner.temp }}/DerivedData
+      RESULT_BUNDLE_PATH: ${{ runner.temp }}/ShirayukiTests.xcresult
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Show Xcode version
+        run: |
+          set -euo pipefail
+          if [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
+            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          fi
+          xcodebuild -version
+
+      - name: Pick an available iPhone simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+          device_id="$(
+            xcrun simctl list devices available \
+              | grep -m 1 'iPhone' \
+              | sed -E 's/.*\(([0-9A-F-]+)\) \(.*/\1/'
+          )"
+
+          if [[ -z "$device_id" ]]; then
+            echo "No available iPhone simulator found."
+            xcrun simctl list devices available
+            exit 1
+          fi
+
+          echo "destination=platform=iOS Simulator,id=$device_id" >> "$GITHUB_OUTPUT"
+
+      - name: Run unit tests
+        run: |
+          set -euo pipefail
+          rm -rf "$DERIVED_DATA_PATH" "$RESULT_BUNDLE_PATH"
+
+          xcodebuild \
+            -project Shirayuki.xcodeproj \
+            -scheme Shirayuki \
+            -configuration Debug \
+            -destination "${{ steps.simulator.outputs.destination }}" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -resultBundlePath "$RESULT_BUNDLE_PATH" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            test
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shirayuki-unit-tests-xcresult
+          path: ${{ runner.temp }}/ShirayukiTests.xcresult
+          if-no-files-found: ignore
