@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CategoriesView: View {
-    @StateObject private var viewModel = HomeViewModel()
+    @StateObject private var viewModel = CategoriesViewModel()
     @ObservedObject private var localization = AppLocalization.shared
     
     private let columns = [

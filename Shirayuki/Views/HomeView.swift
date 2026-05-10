@@ -4,18 +4,18 @@ struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @ObservedObject private var localization = AppLocalization.shared
     @State private var selectedComicId: String?
-    
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    categoriesSection
+                    modeFilterSection
                     comicsSection
                 }
                 .padding(.vertical, 16)
                 .padding(.bottom, 120)
             }
-            .navigationTitle(localization.text("home.title"))
+            .navigationTitle(viewModel.navigationTitle)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             #endif
@@ -26,56 +26,35 @@ struct HomeView: View {
                 ComicDetailView(comicId: comicId)
             }
             .task {
-                guard viewModel.categories.isEmpty, viewModel.comics.isEmpty else { return }
+                guard viewModel.comics.isEmpty else { return }
                 await viewModel.loadHome()
             }
         }
     }
-    
-    private var categoriesSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(localization.text("home.categories"))
-                .font(.system(size: 28, weight: .bold))
-                .padding(.horizontal, 16)
-            
-            if !viewModel.categories.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        CategoryChip(
-                            title: localization.text("home.all"),
-                            imageURL: nil,
-                            isSelected: viewModel.selectedCategory == nil
-                        ) {
-                            Task {
-                                await viewModel.selectCategory(nil)
-                            }
-                        }
-                        
-                        ForEach(viewModel.categories) { category in
-                            CategoryChip(
-                                title: category.title,
-                                imageURL: category.thumb.url,
-                                isSelected: viewModel.selectedCategory == category.title
-                            ) {
-                                Task {
-                                    await viewModel.selectCategory(category.title)
-                                }
-                            }
+
+    private var modeFilterSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(HomeDisplayMode.allCases) { mode in
+                    CategoryChip(
+                        title: mode.displayName,
+                        imageURL: nil,
+                        isSelected: viewModel.selectedMode == mode
+                    ) {
+                        Task {
+                            await viewModel.selectMode(mode)
                         }
                     }
-                    .padding(.horizontal, 16)
                 }
-            } else if viewModel.isLoading {
-                ProgressView()
-                    .padding(.horizontal, 16)
             }
+            .padding(.horizontal, 16)
         }
     }
-    
+
     private var comicsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(viewModel.selectedCategory ?? localization.text("home.latest"))
+                Text(viewModel.navigationTitle)
                     .font(.system(size: 28, weight: .bold))
                 Spacer()
                 if viewModel.isLoading, !viewModel.comics.isEmpty {
@@ -83,7 +62,7 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal, 16)
-            
+
             if let errorMessage = viewModel.errorMessage, viewModel.comics.isEmpty, !viewModel.isLoading {
                 contentErrorState(message: errorMessage)
             } else if viewModel.comics.isEmpty, viewModel.isLoading {
@@ -93,23 +72,29 @@ struct HomeView: View {
                 emptyState
             } else {
                 ComicSelectionGrid(viewModel.comics, id: \.id) { comic in
-                    ComicCard(comic: comic)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selectedComicId = comic.id
+                    Group {
+                        if viewModel.selectedMode == .latest {
+                            ComicCard(comic: comic)
+                        } else {
+                            RankComicCard(comic: comic)
                         }
-                        .onAppear {
-                            guard comic.id == viewModel.comics.last?.id else { return }
-                            Task {
-                                await viewModel.loadNextPage()
-                            }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        selectedComicId = comic.id
+                    }
+                    .onAppear {
+                        guard comic.id == viewModel.comics.last?.id else { return }
+                        Task {
+                            await viewModel.loadNextPage()
                         }
+                    }
                 }
                 .padding(.horizontal, 16)
             }
         }
     }
-    
+
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "book.closed")
@@ -124,7 +109,7 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, minHeight: 220)
         .padding(.horizontal, 16)
     }
-    
+
     private func contentErrorState(message: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
@@ -151,7 +136,7 @@ struct CategoryChip: View {
     let imageURL: String?
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -169,7 +154,7 @@ struct CategoryChip: View {
                                 .fill(Color.secondary.opacity(0.12))
                         )
                 }
-                
+
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
                     .lineLimit(1)

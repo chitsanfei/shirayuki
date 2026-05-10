@@ -177,6 +177,14 @@ nonisolated struct ComicsList: Decodable, Sendable {
     let page: Int
     let pages: Int
     let total: Int
+
+    init(docs: [ComicDoc], limit: Int, page: Int, pages: Int, total: Int) {
+        self.docs = docs
+        self.limit = limit
+        self.page = page
+        self.pages = pages
+        self.total = total
+    }
 }
 
 nonisolated struct ComicsResponse: Decodable, Sendable {
@@ -562,17 +570,33 @@ nonisolated struct UserProfile: Decodable, Sendable {
 }
 
 // MARK: - Rank
+nonisolated enum ComicRankType: String, CaseIterable, Identifiable, Sendable {
+    case daily = "H24"
+    case weekly = "D7"
+    case monthly = "D30"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .daily: return AppLocalization.text("rank.daily")
+        case .weekly: return AppLocalization.text("rank.weekly")
+        case .monthly: return AppLocalization.text("rank.monthly")
+        }
+    }
+}
+
 nonisolated struct ComicRankPayload: Sendable {
     let tt: String
     let ct: String
-    
+
     var query: [String: String] {
         ["tt": tt, "ct": ct]
     }
 }
 
 nonisolated struct ComicRankResponse: Decodable, Sendable {
-    let comics: ComicsList
+    let comics: [ComicDoc]
 }
 
 // MARK: - Random

@@ -171,18 +171,20 @@ actor PicaAPIService {
     }
     
     // MARK: - Rank
-    func fetchComicRank(tt: String, ct: String) async throws -> ComicsList {
+    func fetchComicRank(type: ComicRankType) async throws -> ComicsList {
         let response: BaseResponse<ComicRankResponse> = try await APIClient.shared.request(
             .get,
             path: "comics/leaderboard",
-            query: ["tt": tt, "ct": ct]
+            query: ["tt": type.rawValue, "ct": "VC"]
         )
-        return response.data.comics
-    }
-    
-    func fetchKnightRank() async throws -> ComicsList {
-        let response: BaseResponse<ComicRankResponse> = try await APIClient.shared.request(.get, path: "comics/knight-leaderboard")
-        return response.data.comics
+        let comics = response.data.comics
+        return ComicsList(
+            docs: comics,
+            limit: comics.count,
+            page: 1,
+            pages: 1,
+            total: comics.count
+        )
     }
     
     // MARK: - Random

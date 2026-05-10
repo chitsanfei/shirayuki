@@ -194,6 +194,24 @@ nonisolated private enum AppLocalizationCatalog {
             .english: "Latest Comics",
             .japanese: "最新マンガ"
         ],
+        "rank.daily": [
+            .simplifiedChinese: "日榜",
+            .traditionalChinese: "日榜",
+            .english: "Daily",
+            .japanese: "日間"
+        ],
+        "rank.weekly": [
+            .simplifiedChinese: "周榜",
+            .traditionalChinese: "周榜",
+            .english: "Weekly",
+            .japanese: "週間"
+        ],
+        "rank.monthly": [
+            .simplifiedChinese: "月榜",
+            .traditionalChinese: "月榜",
+            .english: "Monthly",
+            .japanese: "月間"
+        ],
         "home.empty.title": [
             .simplifiedChinese: "暂无漫画",
             .traditionalChinese: "暫無漫畫",
