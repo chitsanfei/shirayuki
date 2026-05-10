@@ -109,4 +109,13 @@ enum HomeDisplayMode: String, CaseIterable, Identifiable {
         case .monthly: return AppLocalization.text("rank.monthly")
         }
     }
+
+    var systemImage: String {
+        switch self {
+        case .latest: return "sparkles"
+        case .daily: return "sun.max.fill"
+        case .weekly: return "calendar"
+        case .monthly: return "moon.stars.fill"
+        }
+    }
 }

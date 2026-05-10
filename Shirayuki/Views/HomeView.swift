@@ -15,7 +15,7 @@ struct HomeView: View {
                 .padding(.vertical, 16)
                 .padding(.bottom, 120)
             }
-            .navigationTitle(viewModel.navigationTitle)
+            .navigationTitle(localization.text("home.title"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             #endif
@@ -38,7 +38,7 @@ struct HomeView: View {
                 ForEach(HomeDisplayMode.allCases) { mode in
                     CategoryChip(
                         title: mode.displayName,
-                        imageURL: nil,
+                        systemImage: mode.systemImage,
                         isSelected: viewModel.selectedMode == mode
                     ) {
                         Task {
@@ -133,27 +133,21 @@ struct HomeView: View {
 
 struct CategoryChip: View {
     let title: String
-    let imageURL: String?
+    let systemImage: String
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                if let imageURL {
-                    ComicCoverImage(url: imageURL)
-                        .frame(width: 28, height: 28)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                } else {
-                    Image(systemName: "square.grid.2x2.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color.secondary.opacity(0.12))
-                        )
-                }
+                Image(systemName: systemImage)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.secondary.opacity(0.12))
+                    )
 
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
