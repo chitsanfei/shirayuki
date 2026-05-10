@@ -1063,6 +1063,48 @@ nonisolated private enum AppLocalizationCatalog {
             .traditionalChinese: "萌新",
             .english: "Newbie",
             .japanese: "初心者"
+        ],
+        "settings.imageQuality": [
+            .simplifiedChinese: "图片质量",
+            .traditionalChinese: "圖片品質",
+            .english: "Image Quality",
+            .japanese: "画像品質"
+        ],
+        "reader.settings.imageQuality": [
+            .simplifiedChinese: "图片质量",
+            .traditionalChinese: "圖片品質",
+            .english: "Image Quality",
+            .japanese: "画像品質"
+        ],
+        "reader.settings.imageQuality.label": [
+            .simplifiedChinese: "清晰度",
+            .traditionalChinese: "清晰度",
+            .english: "Quality",
+            .japanese: "画質"
+        ],
+        "imageQuality.low": [
+            .simplifiedChinese: "低",
+            .traditionalChinese: "低",
+            .english: "Low",
+            .japanese: "低"
+        ],
+        "imageQuality.medium": [
+            .simplifiedChinese: "中",
+            .traditionalChinese: "中",
+            .english: "Medium",
+            .japanese: "中"
+        ],
+        "imageQuality.high": [
+            .simplifiedChinese: "高",
+            .traditionalChinese: "高",
+            .english: "High",
+            .japanese: "高"
+        ],
+        "imageQuality.original": [
+            .simplifiedChinese: "原画",
+            .traditionalChinese: "原畫",
+            .english: "Original",
+            .japanese: "原画"
         ]
     ]
 }

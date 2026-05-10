@@ -108,16 +108,12 @@ struct ComicDetailView: View {
 
     private func startReading(chapterId: String?, chapterOrder: Int?, pageIndex: Int = 0) {
         guard !viewModel.chapters.isEmpty else { return }
-        let chapterIndex = if let chapterId,
-                              let matchedIndex = viewModel.chapters.firstIndex(where: { $0.id == chapterId }) {
+        let effectiveChapterId = chapterId?.isEmpty == false ? chapterId : nil
+        let chapterIndex = if let effectiveChapterId,
+                              let matchedIndex = viewModel.chapters.firstIndex(where: { $0.id == effectiveChapterId }) {
             matchedIndex
         } else if let chapterOrder,
                   let matchedIndex = viewModel.chapters.firstIndex(where: { $0.order == chapterOrder }) {
-            matchedIndex
-        } else if let progress = viewModel.readProgress,
-                  let matchedIndex = viewModel.chapters.firstIndex(where: {
-                      $0.id == progress.chapterId || $0.order == progress.chapterOrder
-                  }) {
             matchedIndex
         } else {
             0
@@ -331,11 +327,23 @@ struct ComicDetailView: View {
                 .buttonStyle(.plain)
                 
                 Button {
-                    startReading(at: 0, pageIndex: 0)
+                    if let progress = viewModel.readProgress {
+                        startReading(
+                            chapterId: progress.chapterId,
+                            chapterOrder: progress.chapterOrder,
+                            pageIndex: progress.pageIndex
+                        )
+                    } else {
+                        startReading(at: 0, pageIndex: 0)
+                    }
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "book.fill")
-                        Text(localization.text("detail.action.startReading"))
+                        Text(
+                            viewModel.readProgress != nil
+                            ? localization.text("detail.action.continueReading")
+                            : localization.text("detail.action.startReading")
+                        )
                     }
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)

@@ -9,11 +9,13 @@ final class SettingsViewModel: ObservableObject {
     @Published var selectedEndpoint: APIEndpoint
     @Published var themeMode: AppThemeMode
     @Published var language: AppLanguage
+    @Published var imageQuality: AppImageQuality
 
     init() {
         selectedEndpoint = AppState.shared.apiEndpoint
         themeMode = AppThemeMode(rawValue: UserDefaults.standard.string(forKey: "app_theme_mode") ?? "") ?? .system
         language = AppLocalization.shared.language
+        imageQuality = AppImageQuality.stored
     }
     
     func clearCache() {
@@ -42,6 +44,11 @@ final class SettingsViewModel: ObservableObject {
     func setLanguage(_ language: AppLanguage) {
         self.language = language
         AppLocalization.shared.setLanguage(language)
+    }
+
+    func setImageQuality(_ quality: AppImageQuality) {
+        AppImageQualityStore.shared.setImageQuality(quality)
+        imageQuality = quality
     }
     
     var appVersion: String {

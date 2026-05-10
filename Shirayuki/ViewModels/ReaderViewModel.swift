@@ -35,6 +35,13 @@ final class ReaderViewModel: ObservableObject {
     @Published var showToolbar = false
     @Published var showPageNumbers = true
     @Published var isMenuLocked = false
+    @Published var imageQuality: AppImageQuality = AppImageQuality.stored {
+        didSet {
+            if imageQuality != oldValue {
+                UserDefaults.standard.set(imageQuality.rawValue, forKey: AppImageQuality.storageKey)
+            }
+        }
+    }
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var isAutoTurning = false
@@ -287,8 +294,9 @@ final class ReaderViewModel: ObservableObject {
     }
 
     func resolvedInitialChapterIndex(in chapters: [PicaChapter]) -> Int {
-        if let initialChapterId,
-           let matchedIndex = chapters.firstIndex(where: { $0.id == initialChapterId }) {
+        let effectiveChapterId = initialChapterId?.isEmpty == false ? initialChapterId : nil
+        if let effectiveChapterId,
+           let matchedIndex = chapters.firstIndex(where: { $0.id == effectiveChapterId }) {
             return matchedIndex
         }
 

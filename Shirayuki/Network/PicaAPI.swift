@@ -346,7 +346,8 @@ nonisolated struct PicaChapter: Decodable, Identifiable, Sendable {
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? AppLocalization.text("data.untitledChapter")
         order = try container.decodeLossyIntIfPresent(forKey: .order) ?? 0
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
-        id = try container.decodeIfPresent(String.self, forKey: .id) ?? uid
+        let decodedId = try container.decodeIfPresent(String.self, forKey: .id)
+        id = (decodedId?.isEmpty == false) ? decodedId! : uid
     }
 }
 

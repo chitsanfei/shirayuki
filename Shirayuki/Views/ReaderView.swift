@@ -1,7 +1,7 @@
 import SwiftUI
 
 private enum ReaderLayout {
-    static let bottomToolbarVisibleOffset: CGFloat = 158
+    static let bottomToolbarVisibleOffset: CGFloat = 186
     static let bottomToolbarHiddenOffset: CGFloat = 22
 }
 
@@ -167,7 +167,13 @@ struct VerticalReader: View {
                     withAnimation(.easeInOut(duration: 0.22)) {
                         proxy.scrollTo(target, anchor: .top)
                     }
-                    Task { @MainActor in
+                }
+                .onAppear {
+                    guard let target = viewModel.scrollTargetPage else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            proxy.scrollTo(target, anchor: .top)
+                        }
                         viewModel.scrollTargetPage = nil
                     }
                 }
@@ -249,6 +255,7 @@ struct HorizontalReader: View {
         #if os(iOS)
         .tabViewStyle(.page(indexDisplayMode: .never))
         #endif
+        .id(viewModel.images.map(\.uid).joined())
         .ignoresSafeArea()
         .simultaneousGesture(
             DragGesture(minimumDistance: 8)
@@ -540,6 +547,14 @@ struct ReaderSettingsSheet: View {
                 Section(AppLocalization.text("reader.settings.display")) {
                     Toggle(AppLocalization.text("reader.settings.showPageNumbers"), isOn: $viewModel.showPageNumbers)
                     Toggle(AppLocalization.text("reader.settings.lockMenu"), isOn: $viewModel.isMenuLocked)
+                }
+
+                Section(AppLocalization.text("reader.settings.imageQuality")) {
+                    Picker(AppLocalization.text("reader.settings.imageQuality.label"), selection: $viewModel.imageQuality) {
+                        ForEach(AppImageQuality.allCases) { quality in
+                            Text(quality.displayName).tag(quality)
+                        }
+                    }
                 }
                 
                 Section(AppLocalization.text("reader.settings.autoTurn")) {

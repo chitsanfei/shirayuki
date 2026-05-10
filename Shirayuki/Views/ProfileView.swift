@@ -322,6 +322,18 @@ struct SettingsSheet: View {
                     Text(language.displayName).tag(language)
                 }
             }
+
+            Picker(
+                localization.text("settings.imageQuality"),
+                selection: Binding(
+                    get: { viewModel.imageQuality },
+                    set: { viewModel.setImageQuality($0) }
+                )
+            ) {
+                ForEach(AppImageQuality.allCases) { quality in
+                    Text(quality.displayName).tag(quality)
+                }
+            }
         }
     }
 

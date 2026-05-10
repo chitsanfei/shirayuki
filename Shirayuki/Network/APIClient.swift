@@ -117,7 +117,7 @@ actor APIClient {
         headers["time"] = timestamp
         headers["signature"] = signature
         headers["authorization"] = token
-        headers["image-quality"] = "original"
+        headers["image-quality"] = AppImageQuality.stored.rawValue
         return headers
     }
     
