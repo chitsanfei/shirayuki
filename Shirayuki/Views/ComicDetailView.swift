@@ -73,6 +73,7 @@ struct ComicDetailView: View {
                         initialPageIndex: readerStartPageIndex
                     )
                 )
+                .id(readerStartChapterId ?? "\(readerStartChapterIndex)")
             }
         }
         #else
@@ -88,6 +89,7 @@ struct ComicDetailView: View {
                         initialPageIndex: readerStartPageIndex
                     )
                 )
+                .id(readerStartChapterId ?? "\(readerStartChapterIndex)")
             }
         }
         #endif
