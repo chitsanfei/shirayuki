@@ -1,15 +1,21 @@
 import SwiftUI
 
+private struct ReaderPresentation: Identifiable {
+    let id = UUID()
+    let comic: ComicDetail
+    let chapters: [PicaChapter]
+    let chapterIndex: Int
+    let chapterId: String?
+    let chapterOrder: Int?
+    let pageIndex: Int
+}
+
 struct ComicDetailView: View {
     let comicId: String
     
     @StateObject private var viewModel: ComicDetailViewModel
     @ObservedObject private var localization = AppLocalization.shared
-    @State private var showReader = false
-    @State private var readerStartChapterIndex = 0
-    @State private var readerStartChapterId: String?
-    @State private var readerStartChapterOrder: Int?
-    @State private var readerStartPageIndex = 0
+    @State private var readerPresentation: ReaderPresentation?
     @State private var routedComicId: String?
     @State private var showAllChapters = false
     @State private var chapterSortOrder: ChapterSortOrder = .ascending
@@ -61,36 +67,30 @@ struct ComicDetailView: View {
             ComicDetailView(comicId: nextComicId)
         }
         #if os(iOS)
-        .fullScreenCover(isPresented: $showReader, onDismiss: viewModel.refreshReadProgress) {
-            if let comic = viewModel.comic {
-                ReaderView(
-                    viewModel: ReaderViewModel(
-                        comic: comic,
-                        initialChapters: viewModel.chapters,
-                        initialChapterIndex: readerStartChapterIndex,
-                        initialChapterId: readerStartChapterId,
-                        initialChapterOrder: readerStartChapterOrder,
-                        initialPageIndex: readerStartPageIndex
-                    )
+        .fullScreenCover(item: $readerPresentation, onDismiss: viewModel.refreshReadProgress) { presentation in
+            ReaderView(
+                viewModel: ReaderViewModel(
+                    comic: presentation.comic,
+                    initialChapters: presentation.chapters,
+                    initialChapterIndex: presentation.chapterIndex,
+                    initialChapterId: presentation.chapterId,
+                    initialChapterOrder: presentation.chapterOrder,
+                    initialPageIndex: presentation.pageIndex
                 )
-                .id(readerStartChapterId ?? "\(readerStartChapterIndex)")
-            }
+            )
         }
         #else
-        .sheet(isPresented: $showReader, onDismiss: viewModel.refreshReadProgress) {
-            if let comic = viewModel.comic {
-                ReaderView(
-                    viewModel: ReaderViewModel(
-                        comic: comic,
-                        initialChapters: viewModel.chapters,
-                        initialChapterIndex: readerStartChapterIndex,
-                        initialChapterId: readerStartChapterId,
-                        initialChapterOrder: readerStartChapterOrder,
-                        initialPageIndex: readerStartPageIndex
-                    )
+        .sheet(item: $readerPresentation, onDismiss: viewModel.refreshReadProgress) { presentation in
+            ReaderView(
+                viewModel: ReaderViewModel(
+                    comic: presentation.comic,
+                    initialChapters: presentation.chapters,
+                    initialChapterIndex: presentation.chapterIndex,
+                    initialChapterId: presentation.chapterId,
+                    initialChapterOrder: presentation.chapterOrder,
+                    initialPageIndex: presentation.pageIndex
                 )
-                .id(readerStartChapterId ?? "\(readerStartChapterIndex)")
-            }
+            )
         }
         #endif
         .task(id: comicId) {
@@ -101,11 +101,15 @@ struct ComicDetailView: View {
     private func startReading(at chapterIndex: Int = 0, pageIndex: Int = 0) {
         let clampedIndex = min(max(chapterIndex, 0), max(0, viewModel.chapters.count - 1))
         let chapter = viewModel.chapters.indices.contains(clampedIndex) ? viewModel.chapters[clampedIndex] : nil
-        readerStartChapterIndex = clampedIndex
-        readerStartChapterId = chapter?.id
-        readerStartChapterOrder = chapter?.order
-        readerStartPageIndex = pageIndex
-        showReader = true
+        guard let comic = viewModel.comic else { return }
+        readerPresentation = ReaderPresentation(
+            comic: comic,
+            chapters: viewModel.chapters,
+            chapterIndex: clampedIndex,
+            chapterId: chapter?.id,
+            chapterOrder: chapter?.order,
+            pageIndex: pageIndex
+        )
     }
 
     private func startReading(chapterId: String?, chapterOrder: Int?, pageIndex: Int = 0) {
