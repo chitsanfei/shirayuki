@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build-unsigned-ipa:
     name: Build iOS Unsigned IPA
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -24,9 +24,17 @@ jobs:
       - name: Show Xcode version
         run: |
           set -euo pipefail
-          if [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
-            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-          fi
+          for xcode_path in \
+            "/Applications/Xcode_26.5.app/Contents/Developer" \
+            "/Applications/Xcode_26.4.1.app/Contents/Developer" \
+            "/Applications/Xcode_26.4.app/Contents/Developer" \
+            "/Applications/Xcode_26.2.app/Contents/Developer" \
+            "/Applications/Xcode.app/Contents/Developer"; do
+            if [[ -d "$xcode_path" ]]; then
+              sudo xcode-select -s "$xcode_path"
+              break
+            fi
+          done
           xcodebuild -version
 
       - name: Archive unsigned app
