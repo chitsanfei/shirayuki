@@ -28,6 +28,11 @@ struct ComicAsyncImage: View {
     let url: String?
     @State private var imageData: Data?
     @State private var isLoading = false
+    @State private var didFail = false
+
+    private var requestID: String {
+        "\(url ?? "empty")|\(AppImageQuality.stored.rawValue)"
+    }
     
     var body: some View {
         Group {
@@ -53,8 +58,9 @@ struct ComicAsyncImage: View {
                 placeholder
             }
         }
-        .task(id: url) {
+        .task(id: requestID) {
             imageData = nil
+            didFail = false
             guard let url = url else {
                 isLoading = false
                 return
@@ -64,18 +70,31 @@ struct ComicAsyncImage: View {
                 imageData = try await ImageLoader.shared.loadImage(from: url)
             } catch {
                 imageData = nil
+                didFail = true
             }
             isLoading = false
         }
-        .animation(.easeOut(duration: 0.24), value: imageData != nil)
+        .overlay {
+            if isLoading {
+                ProgressView()
+                    .tint(.white)
+                    .padding(10)
+                    .background(.black.opacity(0.22), in: Circle())
+                    .transition(.scale(scale: 0.72).combined(with: .opacity))
+            } else if didFail && imageData == nil {
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.secondary.opacity(0.7))
+            }
+        }
+        .animation(.interpolatingSpring(stiffness: 240, damping: 22), value: imageData != nil)
+        .animation(.easeOut(duration: 0.18), value: isLoading)
     }
     
     private var placeholder: some View {
         ZStack {
             Color.gray.opacity(0.12)
-            if isLoading {
-                ProgressView()
-            } else {
+            if !isLoading && !didFail {
                 Image(systemName: "photo")
                     .font(.system(size: 28))
                     .foregroundStyle(.secondary.opacity(0.5))

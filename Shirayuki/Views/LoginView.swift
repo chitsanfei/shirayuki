@@ -6,6 +6,8 @@ struct LoginView: View {
     @State private var username = SavedLoginCredentialStore.savedUsername
     @State private var password = SavedLoginCredentialStore.savedPassword()
     @State private var rememberPassword = SavedLoginCredentialStore.shouldRememberPassword
+    @State private var showSettings = false
+    @ObservedObject private var proxyStore = AppProxyStore.shared
     
     var body: some View {
         NavigationStack {
@@ -62,13 +64,13 @@ struct LoginView: View {
                 .toggleStyle(.switch)
 
                 Menu {
-                    ForEach(APIEndpoint.allCases) { endpoint in
+                    ForEach(proxyStore.rules) { rule in
                         Button {
-                            appState.setAPIEndpoint(endpoint)
+                            proxyStore.select(rule)
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(endpoint.displayName)
-                                Text(endpoint.description)
+                                Text(rule.name)
+                                Text(rule.urlString)
                             }
                         }
                     }
@@ -81,10 +83,10 @@ struct LoginView: View {
                             Text(localization.text("auth.network"))
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(.secondary)
-                            Text(appState.apiEndpoint.displayName)
+                            Text(proxyStore.selectedRule.name)
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundStyle(.primary)
-                            Text(appState.apiEndpoint.description)
+                            Text(proxyStore.selectedRule.urlString)
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
@@ -102,6 +104,15 @@ struct LoginView: View {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.secondary.opacity(0.08))
                     )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showSettings = true
+                } label: {
+                    Label(localization.text("settings.title"), systemImage: "gearshape.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.plain)
                 
@@ -156,6 +167,9 @@ struct LoginView: View {
                 if !newValue {
                     SavedLoginCredentialStore.clearSavedPassword()
                 }
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsSheet()
             }
         }
     }

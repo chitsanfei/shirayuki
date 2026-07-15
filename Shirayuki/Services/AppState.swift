@@ -8,7 +8,6 @@ final class AppState: ObservableObject {
     
     @Published var isLoggedIn = false
     @Published var token: String = ""
-    @Published var apiEndpoint: APIEndpoint = .go2778
     @Published var isLoading = false
     @Published private(set) var isRestoringSession = false
     @Published var errorMessage: String?
@@ -19,18 +18,19 @@ final class AppState: ObservableObject {
     private var isRecoveringSession = false
     
     private init() {
-        self.token = KeychainTokenStore.readToken()
-            ?? UserDefaults.standard.string(forKey: "pica_token")
-            ?? ""
+        // Token 只允许存放在 Keychain；UserDefaults 仅用于一次性向后兼容迁移。
+        let keychainToken = KeychainTokenStore.readToken()
+        let legacyToken = UserDefaults.standard.string(forKey: "pica_token")
+        if let keychainToken {
+            self.token = keychainToken
+        } else if let legacyToken, !legacyToken.isEmpty {
+            KeychainTokenStore.saveToken(legacyToken)
+            self.token = legacyToken
+            UserDefaults.standard.removeObject(forKey: "pica_token")
+        } else {
+            self.token = ""
+        }
         self.isLoggedIn = !token.isEmpty
-        if let raw = UserDefaults.standard.string(forKey: "pica_api_endpoint"),
-           let endpoint = APIEndpoint(rawValue: raw) {
-            self.apiEndpoint = endpoint
-        }
-        if !token.isEmpty {
-            KeychainTokenStore.saveToken(token)
-            UserDefaults.standard.set(token, forKey: "pica_token")
-        }
         isRestoringSession = !token.isEmpty || SavedLoginCredentialStore.hasRememberedCredentials
         NotificationCenter.default.publisher(for: .apiClientDidReceiveUnauthorized)
             .receive(on: DispatchQueue.main)
@@ -60,7 +60,6 @@ final class AppState: ObservableObject {
         userProfile = nil
         errorMessage = nil
         KeychainTokenStore.deleteToken()
-        UserDefaults.standard.removeObject(forKey: "pica_token")
         Task {
             await APIClient.shared.clearToken()
         }
@@ -76,16 +75,8 @@ final class AppState: ObservableObject {
         }
     }
     
-    func setAPIEndpoint(_ endpoint: APIEndpoint) {
-        apiEndpoint = endpoint
-        UserDefaults.standard.set(endpoint.rawValue, forKey: "pica_api_endpoint")
-        Task {
-            await APIClient.shared.setBaseURL(endpoint.rawValue)
-        }
-    }
-
     private func restoreSessionIfNeeded() async {
-        await APIClient.shared.setBaseURL(apiEndpoint.rawValue)
+        await APIClient.shared.setBaseURL(AppProxyStore.shared.selectedRule.urlString)
 
         guard isRestoringSession else { return }
         defer { isRestoringSession = false }
@@ -176,7 +167,6 @@ final class AppState: ObservableObject {
             token = restoredToken
             isLoggedIn = true
             KeychainTokenStore.saveToken(restoredToken)
-            UserDefaults.standard.set(restoredToken, forKey: "pica_token")
             await APIClient.shared.setToken(restoredToken)
 
             do {

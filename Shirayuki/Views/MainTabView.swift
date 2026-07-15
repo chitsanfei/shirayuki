@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @StateObject private var appState = AppState.shared
+    @EnvironmentObject private var appState: AppState
     @State private var selectedTab: AppTab = .home
     
     var body: some View {

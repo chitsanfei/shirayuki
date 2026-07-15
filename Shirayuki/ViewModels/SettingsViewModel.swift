@@ -6,16 +6,22 @@ import SwiftUI
 final class SettingsViewModel: ObservableObject {
     @Published var isClearingCache = false
     @Published var cacheMessage: String?
-    @Published var selectedEndpoint: APIEndpoint
+    @Published var proxyName = ""
+    @Published var proxyURL = ""
+    @Published var editingProxyID: String?
+    @Published var proxyMessage: String?
     @Published var themeMode: AppThemeMode
     @Published var language: AppLanguage
     @Published var imageQuality: AppImageQuality
+    @Published var rankDisplay: RankMetadataDisplay
+    @Published var rankMaxTagCount: Int
 
     init() {
-        selectedEndpoint = AppState.shared.apiEndpoint
         themeMode = AppThemeMode(rawValue: UserDefaults.standard.string(forKey: "app_theme_mode") ?? "") ?? .system
         language = AppLocalization.shared.language
         imageQuality = AppImageQuality.stored
+        rankDisplay = AppRankDisplayStore.shared.display
+        rankMaxTagCount = AppRankDisplayStore.shared.maxTagCount
     }
     
     func clearCache() {
@@ -31,9 +37,53 @@ final class SettingsViewModel: ObservableObject {
         }
     }
     
-    func setEndpoint(_ endpoint: APIEndpoint) {
-        selectedEndpoint = endpoint
-        AppState.shared.setAPIEndpoint(endpoint)
+    func selectProxyRule(_ rule: AppProxyRule) {
+        AppProxyStore.shared.select(rule)
+    }
+
+    func beginEditingProxy(_ rule: AppProxyRule) {
+        guard !rule.isBuiltIn else { return }
+        editingProxyID = rule.id
+        proxyName = rule.name
+        proxyURL = rule.urlString
+        proxyMessage = nil
+    }
+
+    func saveProxyRule() {
+        guard AppProxyStore.shared.saveUserRule(
+            id: editingProxyID,
+            name: proxyName,
+            urlString: proxyURL
+        ) else {
+            proxyMessage = AppLocalization.text("settings.proxy.invalid")
+            return
+        }
+        proxyName = ""
+        proxyURL = ""
+        editingProxyID = nil
+        proxyMessage = nil
+    }
+
+    func cancelEditingProxy() {
+        proxyName = ""
+        proxyURL = ""
+        editingProxyID = nil
+        proxyMessage = nil
+    }
+
+    func deleteProxyRule(_ rule: AppProxyRule) {
+        AppProxyStore.shared.deleteUserRule(rule)
+    }
+
+    func setRankDisplay(_ display: RankMetadataDisplay) {
+        rankDisplay = display
+        AppRankDisplayStore.shared.setDisplay(display)
+    }
+
+    func setRankMaxTagCount(_ count: Int) {
+        let clamped = min(max(count, 1), 5)
+        rankMaxTagCount = clamped
+        AppRankDisplayStore.shared.setMaxTagCount(clamped)
     }
 
     func setThemeMode(_ mode: AppThemeMode) {
@@ -70,7 +120,7 @@ final class SettingsViewModel: ObservableObject {
         URL(string: "https://github.com/chitsanfei/shirayuki")
     }
 
-    var licenseText: String {
+    nonisolated static var licenseText: String {
         """
         GNU GENERAL PUBLIC LICENSE
         Version 3, 29 June 2007
@@ -88,7 +138,7 @@ final class SettingsViewModel: ObservableObject {
         """
     }
 
-    var thirdPartyNoticesText: String {
+    nonisolated static var thirdPartyNoticesText: String {
         """
         Third-Party Notes
 

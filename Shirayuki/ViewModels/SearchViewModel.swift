@@ -2,9 +2,9 @@ import Foundation
 import Combine
 
 @MainActor
-final class SearchViewModel: ObservableObject {
+final class SearchViewModel: ObservableViewModel {
     @Published var query: String = ""
-    @Published var results: [SearchComic] = []
+    @Published var results: [ComicSummary] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var hotKeywords: [String] = []
@@ -21,8 +21,15 @@ final class SearchViewModel: ObservableObject {
         hotKeywords
     }
     
-    var comics: [SearchComic] {
+    var comics: [ComicSummary] {
         results
+    }
+
+    /// PicACG exposes date ascending as `da`; the other sort modes are already
+    /// directional and do not have a separate ascending counterpart.
+    var requestSortMode: ComicSortType {
+        guard sortAscending else { return sortMode }
+        return sortMode == .dd ? .da : sortMode
     }
     
     func search(reset: Bool = false) async {
@@ -45,7 +52,7 @@ final class SearchViewModel: ObservableObject {
             let result = try await PicaAPIService.shared.searchComics(
                 keyword: trimmedQuery,
                 page: currentPage,
-                sort: sortMode
+                sort: requestSortMode
             )
             if reset {
                 results = result.docs
@@ -55,7 +62,7 @@ final class SearchViewModel: ObservableObject {
             totalPages = result.pages
         } catch {
             results = []
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
     }
     

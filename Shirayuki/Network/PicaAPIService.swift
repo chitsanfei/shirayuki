@@ -12,20 +12,20 @@ actor PicaAPIService {
         let response: BaseResponse<LoginResponse> = try await APIClient.shared.request(
             .post,
             path: "auth/sign-in",
-            body: try payload.toDictionary()
+            body: payload
         )
         await APIClient.shared.setToken(response.data.token)
         return response.data.token
     }
     
     func register(email: String, password: String, name: String, birthday: String, gender: String) async throws {
-        let body: [String: Any] = [
-            "email": email,
-            "password": password,
-            "name": name,
-            "birthday": birthday,
-            "gender": gender
-        ]
+        let body = RegisterPayload(
+            email: email,
+            password: password,
+            name: name,
+            birthday: birthday,
+            gender: gender
+        )
         let _: BaseResponse<EmptyResponse> = try await APIClient.shared.request(.post, path: "auth/register", body: body)
     }
     
@@ -97,7 +97,7 @@ actor PicaAPIService {
         return (images, title)
     }
     
-    func fetchRecommendations(id: String) async throws -> [RecommendComic] {
+    func fetchRecommendations(id: String) async throws -> [ComicSummary] {
         let response: BaseResponse<RecommendComics> = try await APIClient.shared.request(
             .get,
             path: "comics/\(id)/recommendation"
@@ -116,12 +116,12 @@ actor PicaAPIService {
     }
     
     // MARK: - Search
-    func searchComics(keyword: String, page: Int = 1, sort: ComicSortType = .dd) async throws -> SearchComicsList {
-        let payload = SearchPayload(keyword: keyword, page: page, sort: sort)
+    func searchComics(keyword: String, page: Int = 1, sort: ComicSortType = .dd) async throws -> ComicsList {
+        let payload = SearchPayload(keyword: keyword, sort: sort)
         let response: BaseResponse<SearchResponse> = try await APIClient.shared.request(
             .post,
             path: "comics/advanced-search?page=\(page)",
-            body: try payload.toDictionary()
+            body: payload
         )
         return response.data.comics
     }
@@ -150,7 +150,7 @@ actor PicaAPIService {
         let _: BaseResponse<EmptyResponse> = try await APIClient.shared.request(
             .put,
             path: "users/password",
-            body: ["old_password": oldPassword, "new_password": newPassword]
+            body: PasswordUpdatePayload(oldPassword: oldPassword, newPassword: newPassword)
         )
     }
     
@@ -158,7 +158,7 @@ actor PicaAPIService {
         let _: BaseResponse<EmptyResponse> = try await APIClient.shared.request(
             .put,
             path: "users/avatar",
-            body: ["avatar": "data:image/jpeg;base64,\(base64)"]
+            body: AvatarUpdatePayload(avatar: "data:image/jpeg;base64,\(base64)")
         )
     }
     
@@ -166,7 +166,7 @@ actor PicaAPIService {
         let _: BaseResponse<EmptyResponse> = try await APIClient.shared.request(
             .put,
             path: "users/profile",
-            body: ["slogan": slogan]
+            body: ProfileUpdatePayload(slogan: slogan)
         )
     }
     
@@ -237,11 +237,3 @@ actor PicaAPIService {
 
 // MARK: - Helpers
 nonisolated struct EmptyResponse: Decodable, Sendable {}
-
-extension Encodable {
-    nonisolated func toDictionary() throws -> [String: Any] {
-        let data = try JSONEncoder().encode(self)
-        let json = try JSONSerialization.jsonObject(with: data)
-        return json as? [String: Any] ?? [:]
-    }
-}

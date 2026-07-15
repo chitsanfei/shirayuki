@@ -71,6 +71,36 @@ final class ReaderViewModelTests: XCTestCase {
         XCTAssertEqual(progress?.chapterOrder, chapter.order)
         XCTAssertEqual(progress?.pageIndex, 4)
     }
+
+    func testApplyUserScrollPageUpdatesIndexWithoutScrollTarget() throws {
+        let comic = try makeComic(id: "scroll-comic")
+        let chapter = try makeChapter(uid: "uid-s", id: "chapter-s", title: "第1话", order: 1)
+        let images = try (1...5).map { try makeImage(uid: "p\($0)", path: "/c/\($0).jpg") }
+
+        let viewModel = ReaderViewModel(comic: comic, initialChapters: [chapter])
+        viewModel.chapters = [chapter]
+        viewModel.images = images
+        viewModel.currentPageIndex = 0
+
+        viewModel.applyUserScrollPage(3)
+        XCTAssertEqual(viewModel.currentPageIndex, 3)
+        // 用户滚动不应触发新的程序化跳转
+        XCTAssertNil(viewModel.scrollTargetPage)
+    }
+
+    func testConsumeScrollTargetPageClearsPendingTarget() throws {
+        let comic = try makeComic(id: "consume-comic")
+        let chapter = try makeChapter(uid: "uid-c", id: "chapter-c", title: "第1话", order: 1)
+        let images = try (1...3).map { try makeImage(uid: "p\($0)", path: "/c/\($0).jpg") }
+
+        let viewModel = ReaderViewModel(comic: comic, initialChapters: [chapter])
+        viewModel.chapters = [chapter]
+        viewModel.images = images
+        viewModel.scrollTargetPage = 2
+
+        viewModel.consumeScrollTargetPage()
+        XCTAssertNil(viewModel.scrollTargetPage)
+    }
 }
 
 private func makeComic(id: String) throws -> ComicDetail {

@@ -18,13 +18,11 @@ final class RoutingAndSettingsTests: XCTestCase {
         XCTAssertFalse(APIEndpoint.go2778.description.isEmpty)
     }
 
-    @MainActor
     func testThirdPartyNoticesDescribeDesignReferences() {
-        let previousLanguage = AppLocalization.shared.language
-        AppLocalization.shared.setLanguage(.simplifiedChinese)
-        defer { AppLocalization.shared.setLanguage(previousLanguage) }
-
-        let text = SettingsViewModel().thirdPartyNoticesText
+        // Access the static property directly to avoid instantiating the
+        // @MainActor-isolated SettingsViewModel, which triggers a Swift
+        // runtime crash in its deinit under XCTest's task-local scope.
+        let text = SettingsViewModel.thirdPartyNoticesText
 
         XCTAssertTrue(text.contains("haka_comic"))
         XCTAssertTrue(text.contains("design guidance only"))

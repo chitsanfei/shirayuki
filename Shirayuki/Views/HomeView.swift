@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @ObservedObject private var localization = AppLocalization.shared
+    @ObservedObject private var rankDisplay = AppRankDisplayStore.shared
     @State private var selectedComicId: String?
 
     var body: some View {
@@ -76,7 +77,11 @@ struct HomeView: View {
                         if viewModel.selectedMode == .latest {
                             ComicCard(comic: comic)
                         } else {
-                            RankComicCard(comic: comic)
+                            RankComicCard(
+                                comic: comic,
+                                metadataDisplay: rankDisplay.display,
+                                maxTagCount: rankDisplay.maxTagCount
+                            )
                         }
                     }
                     .contentShape(Rectangle())

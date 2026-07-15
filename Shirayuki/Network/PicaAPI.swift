@@ -16,6 +16,32 @@ nonisolated struct LoginPayload: Encodable, Sendable {
     let password: String
 }
 
+nonisolated struct RegisterPayload: Encodable, Sendable {
+    let email: String
+    let password: String
+    let name: String
+    let birthday: String
+    let gender: String
+}
+
+nonisolated struct PasswordUpdatePayload: Encodable, Sendable {
+    let oldPassword: String
+    let newPassword: String
+
+    enum CodingKeys: String, CodingKey {
+        case oldPassword = "old_password"
+        case newPassword = "new_password"
+    }
+}
+
+nonisolated struct AvatarUpdatePayload: Encodable, Sendable {
+    let avatar: String
+}
+
+nonisolated struct ProfileUpdatePayload: Encodable, Sendable {
+    let slogan: String
+}
+
 nonisolated struct LoginResponse: Decodable, Sendable {
     let token: String
 }
@@ -130,55 +156,55 @@ nonisolated struct ComicsPayload: Sendable {
     }
 }
 
-// MARK: - Doc (Comic List Item)
-nonisolated struct ComicDoc: Decodable, Identifiable, Sendable {
-    let uid: String
+// MARK: - Comic Summary (unified comic list item)
+// 合并了原 ComicDoc / RecommendComic / SearchComic 三个近重复的列表 DTO。
+// 所有字段采用容错解码：缺失或类型不符时回退到默认值，避免某一接口少返回字段时整体解码失败。
+nonisolated struct ComicSummary: Decodable, Identifiable, Sendable {
+    let id: String
     let title: String
     let author: String
+    let thumb: ImageDetail
     let totalViews: Int
     let totalLikes: Int?
+    let likesCount: Int
     let pagesCount: Int
     let epsCount: Int
     let finished: Bool
     let categories: [String]
-    let thumb: ImageDetail
-    let likesCount: Int
     let tags: [String]
-    
-    var id: String { uid }
-    
+
     enum CodingKeys: String, CodingKey {
-        case uid = "_id"
-        case title, author, totalViews, totalLikes, pagesCount, epsCount
-        case finished, categories, thumb, likesCount, tags
+        case id = "_id"
+        case title, author, thumb, totalViews, totalLikes, likesCount
+        case pagesCount, epsCount, finished, categories, tags
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        uid = try container.decode(String.self, forKey: .uid)
-        title = try container.decode(String.self, forKey: .title)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
         author = try container.decodeIfPresent(String.self, forKey: .author) ?? ""
+        thumb = try container.decodeIfPresent(ImageDetail.self, forKey: .thumb) ?? .placeholder
         totalViews = try container.decodeLossyIntIfPresent(forKey: .totalViews) ?? 0
         totalLikes = try container.decodeLossyIntIfPresent(forKey: .totalLikes)
-        pagesCount = try container.decode(Int.self, forKey: .pagesCount)
-        epsCount = try container.decode(Int.self, forKey: .epsCount)
-        finished = try container.decode(Bool.self, forKey: .finished)
-        categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
-        thumb = try container.decodeIfPresent(ImageDetail.self, forKey: .thumb) ?? .placeholder
         likesCount = try container.decodeLossyIntIfPresent(forKey: .likesCount) ?? 0
+        pagesCount = try container.decodeLossyIntIfPresent(forKey: .pagesCount) ?? 0
+        epsCount = try container.decodeLossyIntIfPresent(forKey: .epsCount) ?? 0
+        finished = try container.decodeIfPresent(Bool.self, forKey: .finished) ?? false
+        categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
     }
 }
 
 // MARK: - Comics List
 nonisolated struct ComicsList: Decodable, Sendable {
-    let docs: [ComicDoc]
+    let docs: [ComicSummary]
     let limit: Int
     let page: Int
     let pages: Int
     let total: Int
 
-    init(docs: [ComicDoc], limit: Int, page: Int, pages: Int, total: Int) {
+    init(docs: [ComicSummary], limit: Int, page: Int, pages: Int, total: Int) {
         self.docs = docs
         self.limit = limit
         self.page = page
@@ -372,38 +398,8 @@ nonisolated struct ChaptersResponse: Decodable, Sendable {
 }
 
 // MARK: - Recommend
-nonisolated struct RecommendComic: Decodable, Identifiable, Sendable {
-    let id: String
-    let title: String
-    let author: String
-    let thumb: ImageDetail
-    let pagesCount: Int
-    let epsCount: Int
-    let finished: Bool
-    let categories: [String]
-    let likesCount: Int
-    
-    enum CodingKeys: String, CodingKey {
-        case id = "_id"
-        case title, author, thumb, pagesCount, epsCount, finished, categories, likesCount
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(String.self, forKey: .id)
-        title = try container.decode(String.self, forKey: .title)
-        author = try container.decodeIfPresent(String.self, forKey: .author) ?? ""
-        thumb = try container.decodeIfPresent(ImageDetail.self, forKey: .thumb) ?? .placeholder
-        pagesCount = try container.decodeLossyIntIfPresent(forKey: .pagesCount) ?? 0
-        epsCount = try container.decodeLossyIntIfPresent(forKey: .epsCount) ?? 0
-        finished = try container.decode(Bool.self, forKey: .finished)
-        categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
-        likesCount = try container.decodeLossyIntIfPresent(forKey: .likesCount) ?? 0
-    }
-}
-
 nonisolated struct RecommendComics: Decodable, Sendable {
-    let comics: [RecommendComic]
+    let comics: [ComicSummary]
 }
 
 // MARK: - Chapter Images
@@ -449,60 +445,15 @@ nonisolated struct ActionResponse: Decodable, Sendable {
 }
 
 // MARK: - Search
+// 注意：PicACG 的 /comics/advanced-search 端点 page 由 URL query 传递
+// （见 PicaAPIService.searchComics），body 仅编码 keyword 与 sort。
 nonisolated struct SearchPayload: Encodable, Sendable {
     let keyword: String
-    let page: Int
     let sort: ComicSortType
-    
-    enum CodingKeys: String, CodingKey {
-        case keyword, sort
-    }
-}
-
-nonisolated struct SearchComic: Decodable, Identifiable, Sendable {
-    let uid: String
-    let title: String
-    let author: String
-    let thumb: ImageDetail
-    let totalViews: Int?
-    let categories: [String]
-    let totalLikes: Int?
-    let likesCount: Int
-    let tags: [String]
-    let finished: Bool
-    
-    var id: String { uid }
-    
-    enum CodingKeys: String, CodingKey {
-        case uid = "_id"
-        case title, author, thumb, totalViews, categories, totalLikes, likesCount, tags, finished
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        uid = try container.decode(String.self, forKey: .uid)
-        title = try container.decode(String.self, forKey: .title)
-        author = try container.decodeIfPresent(String.self, forKey: .author) ?? "??"
-        thumb = try container.decodeIfPresent(ImageDetail.self, forKey: .thumb) ?? .placeholder
-        totalViews = try container.decodeLossyIntIfPresent(forKey: .totalViews)
-        categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
-        totalLikes = try container.decodeLossyIntIfPresent(forKey: .totalLikes)
-        likesCount = try container.decodeLossyIntIfPresent(forKey: .likesCount) ?? 0
-        tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
-        finished = try container.decode(Bool.self, forKey: .finished)
-    }
-}
-
-nonisolated struct SearchComicsList: Decodable, Sendable {
-    let docs: [SearchComic]
-    let total: Int
-    let limit: Int
-    let page: Int
-    let pages: Int
 }
 
 nonisolated struct SearchResponse: Decodable, Sendable {
-    let comics: SearchComicsList
+    let comics: ComicsList
 }
 
 // MARK: - User Profile
@@ -596,7 +547,7 @@ nonisolated struct ComicRankPayload: Sendable {
 }
 
 nonisolated struct ComicRankResponse: Decodable, Sendable {
-    let comics: [ComicDoc]
+    let comics: [ComicSummary]
 }
 
 // MARK: - Random
@@ -654,10 +605,13 @@ nonisolated struct ExtraRecommendComic: Decodable, Sendable {
 
 private extension KeyedDecodingContainer {
     nonisolated func decodeLossyIntIfPresent(forKey key: Key) throws -> Int? {
-        if let value = try decodeIfPresent(Int.self, forKey: key) {
+        // 用 try? 容错：当 JSON 值是字符串（如 "42"）时，decodeIfPresent(Int.self)
+        // 会抛出 typeMismatch，原先的 String 分支永远不可达。这里把抛出也视作
+        // “不是 Int”，再尝试按字符串解析，从而真正实现 lossy 解码。
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
             return value
         }
-        if let value = try decodeIfPresent(String.self, forKey: key) {
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
             return Int(value)
         }
         return nil

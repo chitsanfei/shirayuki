@@ -548,6 +548,96 @@ nonisolated private enum AppLocalizationCatalog {
             .english: "Network Route",
             .japanese: "ネットワーク経路"
         ],
+        "settings.proxy.title": [
+            .simplifiedChinese: "代理规则",
+            .traditionalChinese: "代理規則",
+            .english: "Proxy Rule",
+            .japanese: "プロキシルール"
+        ],
+        "settings.proxy.subtitle": [
+            .simplifiedChinese: "输入 HTTP/HTTPS 代理地址，例如 http://127.0.0.1:7890",
+            .traditionalChinese: "輸入 HTTP/HTTPS 代理位址，例如 http://127.0.0.1:7890",
+            .english: "Enter an HTTP/HTTPS proxy, for example http://127.0.0.1:7890",
+            .japanese: "HTTP/HTTPSプロキシを入力（例：http://127.0.0.1:7890）"
+        ],
+        "settings.proxy.placeholder": [
+            .simplifiedChinese: "http://主机:端口",
+            .traditionalChinese: "http://主機:連接埠",
+            .english: "http://host:port",
+            .japanese: "http://ホスト:ポート"
+        ],
+        "settings.proxy.apply": [
+            .simplifiedChinese: "应用代理规则",
+            .traditionalChinese: "套用代理規則",
+            .english: "Apply Proxy Rule",
+            .japanese: "プロキシルールを適用"
+        ],
+        "settings.proxy.requiredForSwitch": [
+            .simplifiedChinese: "配置代理后才可切换官方线路。",
+            .traditionalChinese: "設定代理後才能切換官方線路。",
+            .english: "Configure a proxy before switching to the official route.",
+            .japanese: "公式ルートへ切り替えるにはプロキシを設定してください。"
+        ],
+        "settings.proxy.name": [
+            .simplifiedChinese: "配置名称",
+            .traditionalChinese: "配置名稱",
+            .english: "Configuration Name",
+            .japanese: "設定名"
+        ],
+        "settings.proxy.url": [
+            .simplifiedChinese: "HTTP/HTTPS API 地址",
+            .traditionalChinese: "HTTP/HTTPS API 位址",
+            .english: "HTTP/HTTPS API URL",
+            .japanese: "HTTP/HTTPS API URL"
+        ],
+        "settings.proxy.add": [
+            .simplifiedChinese: "添加代理配置",
+            .traditionalChinese: "新增代理設定",
+            .english: "Add Proxy",
+            .japanese: "プロキシを追加"
+        ],
+        "settings.proxy.save": [
+            .simplifiedChinese: "保存代理配置",
+            .traditionalChinese: "儲存代理設定",
+            .english: "Save Proxy",
+            .japanese: "プロキシを保存"
+        ],
+        "settings.proxy.invalid": [
+            .simplifiedChinese: "请输入名称和有效的 HTTP/HTTPS 地址。",
+            .traditionalChinese: "請輸入名稱與有效的 HTTP/HTTPS 位址。",
+            .english: "Enter a name and a valid HTTP/HTTPS URL.",
+            .japanese: "名前と有効なHTTP/HTTPS URLを入力してください。"
+        ],
+        "settings.rank.title": [
+            .simplifiedChinese: "榜单卡片",
+            .traditionalChinese: "榜單卡片",
+            .english: "Ranking Cards",
+            .japanese: "ランキングカード"
+        ],
+        "settings.rank.display": [
+            .simplifiedChinese: "信息类型",
+            .traditionalChinese: "資訊類型",
+            .english: "Metadata",
+            .japanese: "メタデータ"
+        ],
+        "settings.rank.display.categories": [
+            .simplifiedChinese: "分类",
+            .traditionalChinese: "分類",
+            .english: "Categories",
+            .japanese: "カテゴリ"
+        ],
+        "settings.rank.display.tags": [
+            .simplifiedChinese: "标签",
+            .traditionalChinese: "標籤",
+            .english: "Tags",
+            .japanese: "タグ"
+        ],
+        "settings.rank.maxCount": [
+            .simplifiedChinese: "最多显示数量",
+            .traditionalChinese: "最多顯示數量",
+            .english: "Maximum Items",
+            .japanese: "最大表示数"
+        ],
         "settings.cache": [
             .simplifiedChinese: "缓存",
             .traditionalChinese: "快取",

@@ -43,8 +43,8 @@ enum ComicsBrowserSource: Hashable, Identifiable, Sendable {
 }
 
 @MainActor
-final class ComicsBrowserViewModel: ObservableObject {
-    @Published var comics: [ComicDoc] = []
+final class ComicsBrowserViewModel: ObservableViewModel {
+    @Published var comics: [ComicSummary] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var currentPage = 1
@@ -94,11 +94,11 @@ final class ComicsBrowserViewModel: ObservableObject {
             currentPage = result.page
             totalPages = result.pages
         } catch {
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
     }
-    
-    func loadNextPageIfNeeded(current comic: ComicDoc) async {
+
+    func loadNextPageIfNeeded(current comic: ComicSummary) async {
         guard comic.id == comics.last?.id else { return }
         guard !isLoading, currentPage < totalPages else { return }
         currentPage += 1

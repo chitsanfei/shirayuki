@@ -274,11 +274,13 @@ struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = SettingsViewModel()
     @ObservedObject private var localization = AppLocalization.shared
+    @ObservedObject private var proxyStore = AppProxyStore.shared
     
     var body: some View {
         NavigationStack {
             Form {
                 appearanceSection
+                rankSection
                 networkSection
                 cacheSection
                 sourceSection
@@ -339,13 +341,122 @@ struct SettingsSheet: View {
 
     private var networkSection: some View {
         Section(localization.text("settings.network")) {
-            ForEach(APIEndpoint.allCases) { endpoint in
-                Button {
-                    viewModel.setEndpoint(endpoint)
-                } label: {
-                    endpointRow(endpoint)
+            ForEach(proxyStore.rules) { rule in
+                HStack(spacing: 10) {
+                    Button {
+                        viewModel.selectProxyRule(rule)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: rule.isBuiltIn ? "lock.shield.fill" : "network")
+                                .foregroundStyle(rule.isBuiltIn ? .orange : Color.accentColor)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(rule.name)
+                                    .foregroundStyle(.primary)
+                                Text(rule.urlString)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            if proxyStore.selectedRuleID == rule.id {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    if rule.isBuiltIn {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Button {
+                            viewModel.beginEditingProxy(rule)
+                        } label: {
+                            Image(systemName: "pencil")
+                        }
+                        .buttonStyle(.borderless)
+
+                        Button {
+                            viewModel.deleteProxyRule(rule)
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.borderless)
+                    }
                 }
-                .buttonStyle(.plain)
+            }
+
+            TextField(
+                localization.text("settings.proxy.name"),
+                text: $viewModel.proxyName
+            )
+
+            TextField(
+                localization.text("settings.proxy.url"),
+                text: $viewModel.proxyURL
+            )
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            #endif
+
+            HStack {
+                Button(
+                    viewModel.editingProxyID == nil
+                    ? localization.text("settings.proxy.add")
+                    : localization.text("settings.proxy.save")
+                ) {
+                    viewModel.saveProxyRule()
+                }
+                .disabled(viewModel.proxyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if viewModel.editingProxyID != nil {
+                    Button(localization.text("common.cancel")) {
+                        viewModel.cancelEditingProxy()
+                    }
+                }
+            }
+
+            if let proxyMessage = viewModel.proxyMessage {
+                Text(proxyMessage)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private var rankSection: some View {
+        Section(localization.text("settings.rank.title")) {
+            Picker(
+                localization.text("settings.rank.display"),
+                selection: Binding(
+                    get: { viewModel.rankDisplay },
+                    set: { viewModel.setRankDisplay($0) }
+                )
+            ) {
+                ForEach(RankMetadataDisplay.allCases) { display in
+                    Text(localization.text(display.localizationKey)).tag(display)
+                }
+            }
+
+            Stepper(
+                value: Binding(
+                    get: { viewModel.rankMaxTagCount },
+                    set: { viewModel.setRankMaxTagCount($0) }
+                ),
+                in: 1...5,
+                step: 1
+            ) {
+                HStack {
+                    Text(localization.text("settings.rank.maxCount"))
+                    Spacer()
+                    Text("\(viewModel.rankMaxTagCount)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
             }
         }
     }
@@ -395,7 +506,7 @@ struct SettingsSheet: View {
 
             NavigationLink(localization.text("settings.license")) {
                 ScrollView {
-                    Text(viewModel.licenseText)
+                    Text(SettingsViewModel.licenseText)
                         .font(.system(.body, design: .monospaced))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
@@ -408,7 +519,7 @@ struct SettingsSheet: View {
 
             NavigationLink(localization.text("settings.references")) {
                 ScrollView {
-                    Text(viewModel.thirdPartyNoticesText)
+                    Text(SettingsViewModel.thirdPartyNoticesText)
                         .font(.system(.body, design: .default))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
@@ -439,23 +550,4 @@ struct SettingsSheet: View {
         }
     }
 
-    private func endpointRow(_ endpoint: APIEndpoint) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(endpoint.displayName)
-                    .foregroundStyle(.primary)
-                Text(endpoint.description)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.leading)
-            }
-
-            Spacer()
-
-            if viewModel.selectedEndpoint == endpoint {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Color.accentColor)
-            }
-        }
-    }
 }

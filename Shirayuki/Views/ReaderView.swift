@@ -1,6 +1,8 @@
 import SwiftUI
 
 private enum ReaderLayout {
+    static let topToolbarHeight: CGFloat = 64
+    static let bottomToolbarHeight: CGFloat = 190
     static let bottomToolbarVisibleOffset: CGFloat = 186
     static let bottomToolbarHiddenOffset: CGFloat = 22
 }
@@ -86,6 +88,17 @@ struct ReaderView: View {
                     HorizontalReader(viewModel: viewModel)
                 }
             }
+            .id(viewModel.readMode)
+            .transition(
+                .asymmetric(
+                    insertion: .scale(scale: 0.94, anchor: .center).combined(with: .opacity),
+                    removal: .scale(scale: 1.06, anchor: .center).combined(with: .opacity)
+                )
+            )
+            .animation(
+                .interpolatingSpring(stiffness: 170, damping: 24),
+                value: viewModel.readMode
+            )
         } else if viewModel.isLoading {
             ReaderLoadingState(onClose: closeReader)
         } else if let errorMessage = viewModel.errorMessage {
@@ -167,14 +180,20 @@ struct VerticalReader: View {
                     withAnimation(.easeInOut(duration: 0.22)) {
                         proxy.scrollTo(target, anchor: .top)
                     }
+                    viewModel.consumeScrollTargetPage()
                 }
                 .onAppear {
+                    // 首次出现的程序化跳转由 scrollTargetPage 的 onChange 驱动；
+                    // 若 ScrollView 首帧尚未布局导致 onAppear 时 onChange 未触发，
+                    // 在下一帧再补一次，避免 0.1s 盲等。
                     guard let target = viewModel.scrollTargetPage else { return }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    Task { @MainActor in
+                        await Task.yield()
+                        guard viewModel.scrollTargetPage == target else { return }
                         withAnimation(.easeInOut(duration: 0.22)) {
                             proxy.scrollTo(target, anchor: .top)
                         }
-                        viewModel.scrollTargetPage = nil
+                        viewModel.consumeScrollTargetPage()
                     }
                 }
             }
@@ -224,10 +243,9 @@ struct VerticalReader: View {
         guard let nearest = candidates.min(by: {
             abs($0.frame.midY - targetY) < abs($1.frame.midY - targetY)
         }) else { return }
-        
+
         if nearest.index != viewModel.currentPageIndex {
-            viewModel.currentPageIndex = nearest.index
-            viewModel.preloadAdjacentImages()
+            viewModel.applyUserScrollPage(nearest.index)
         }
     }
 }
@@ -240,8 +258,7 @@ struct HorizontalReader: View {
             selection: Binding(
                 get: { viewModel.currentPageIndex },
                 set: { newValue in
-                    viewModel.currentPageIndex = newValue
-                    viewModel.preloadAdjacentImages()
+                    viewModel.applyUserScrollPage(newValue)
                 }
             )
         ) {
@@ -255,7 +272,6 @@ struct HorizontalReader: View {
         #if os(iOS)
         .tabViewStyle(.page(indexDisplayMode: .never))
         #endif
-        .id(viewModel.images.map(\.uid).joined())
         .ignoresSafeArea()
         .simultaneousGesture(
             DragGesture(minimumDistance: 8)
@@ -351,23 +367,36 @@ struct ReaderTopToolbar: View {
     }
     
     var body: some View {
-        VStack {
+        VStack(spacing: 0) {
             HStack(spacing: 12) {
                 ReaderToolbarIconButton(systemImage: "chevron.left", action: onBack)
 
-                ReaderGlassPanel(horizontalPadding: 16, verticalPadding: 14) {
+                ReaderGlassPanel(horizontalPadding: 16, verticalPadding: 6) {
                     VStack(spacing: 4) {
-                        Text(titleText)
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
+                        Text(viewModel.comic.title)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.68))
                             .lineLimit(1)
 
-                        Text(viewModel.readMode.displayName)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.68))
+                        HStack(spacing: 6) {
+                            Text(titleText)
+                                .font(.system(size: 15, weight: .bold))
+                                .lineLimit(1)
+                            if !viewModel.images.isEmpty {
+                                Text("•")
+                                    .foregroundStyle(.white.opacity(0.45))
+                                Text("\(viewModel.currentPageIndex + 1)/\(viewModel.images.count)")
+                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.white.opacity(0.72))
+                                    .monospacedDigit()
+                            }
+                        }
+                        .foregroundStyle(.white)
                     }
                     .frame(maxWidth: .infinity)
                 }
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
 
                 HStack(spacing: 10) {
                     Menu {
@@ -386,14 +415,15 @@ struct ReaderTopToolbar: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, topInset + 8)
+            .padding(.top, topInset + 4)
+            .frame(height: topInset + ReaderLayout.topToolbarHeight, alignment: .top)
             
             Spacer()
         }
-        .offset(y: isVisible ? 0 : -(topInset + 140))
+        .offset(y: isVisible ? 0 : -(topInset + ReaderLayout.topToolbarHeight + 16))
         .opacity(isVisible ? 1 : 0)
         .scaleEffect(isVisible ? 1 : 0.96, anchor: .top)
-        .animation(.spring(response: 0.3, dampingFraction: 0.84), value: isVisible)
+        .animation(.interpolatingSpring(stiffness: 230, damping: 25), value: isVisible)
     }
 }
 
@@ -481,10 +511,10 @@ struct ReaderBottomToolbar: View {
                 .padding(.bottom, bottomInset + 12)
             }
         }
-        .offset(y: isVisible ? 0 : 240)
+        .offset(y: isVisible ? 0 : ReaderLayout.bottomToolbarHeight)
         .opacity(isVisible ? 1 : 0)
         .scaleEffect(isVisible ? 1 : 0.96, anchor: .bottom)
-        .animation(.spring(response: 0.3, dampingFraction: 0.84), value: isVisible)
+        .animation(.interpolatingSpring(stiffness: 230, damping: 25), value: isVisible)
     }
 }
 

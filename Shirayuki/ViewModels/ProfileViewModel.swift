@@ -2,10 +2,10 @@ import Foundation
 import Combine
 
 @MainActor
-final class ProfileViewModel: ObservableObject {
+final class ProfileViewModel: ObservableViewModel {
     @Published var isLoading = false
     @Published var errorMessage: String?
-    @Published var favorites: [ComicDoc] = []
+    @Published var favorites: [ComicSummary] = []
     @Published var favoriteTotalCount: Int?
     @Published var currentPage = 1
     @Published var totalPages = 1
@@ -53,7 +53,7 @@ final class ProfileViewModel: ObservableObject {
         do {
             userProfile = try await PicaAPIService.shared.fetchUserProfile()
         } catch {
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
     }
     
@@ -80,7 +80,7 @@ final class ProfileViewModel: ObservableObject {
             }
             totalPages = result.pages
         } catch {
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
     }
     
@@ -95,10 +95,10 @@ final class ProfileViewModel: ObservableObject {
             try await PicaAPIService.shared.punchIn()
             userProfile = try await PicaAPIService.shared.fetchUserProfile()
         } catch {
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
     }
-    
+
     func logout() {
         AppState.shared.logout()
     }

@@ -16,7 +16,7 @@ enum ReadMode: String, CaseIterable, Identifiable {
 }
 
 @MainActor
-final class ReaderViewModel: ObservableObject {
+final class ReaderViewModel: ObservableViewModel {
     @Published var comic: ComicDetail
     @Published var chapters: [PicaChapter] = []
     @Published var currentChapterIndex: Int = 0
@@ -24,6 +24,16 @@ final class ReaderViewModel: ObservableObject {
     @Published var currentPageIndex: Int = 0 {
         didSet {
             scheduleProgressPersistence()
+        }
+    }
+
+    /// 由用户交互（滚动 / 翻页 / Slider）调用：只更新页码与进度副作用，不发起新的程序化滚动。
+    func applyUserScrollPage(_ index: Int) {
+        guard !images.isEmpty else { return }
+        let clamped = min(max(index, 0), images.count - 1)
+        if clamped != currentPageIndex {
+            currentPageIndex = clamped
+            preloadAdjacentImages()
         }
     }
     @Published var currentChapterTitle: String = ""
@@ -38,7 +48,7 @@ final class ReaderViewModel: ObservableObject {
     @Published var imageQuality: AppImageQuality = AppImageQuality.stored {
         didSet {
             if imageQuality != oldValue {
-                UserDefaults.standard.set(imageQuality.rawValue, forKey: AppImageQuality.storageKey)
+                AppImageQualityStore.shared.setImageQuality(imageQuality)
             }
         }
     }
@@ -84,6 +94,8 @@ final class ReaderViewModel: ObservableObject {
         self.initialPageIndex = initialPageIndex
     }
 
+    // deinit 在 @MainActor 类中是非 isolated 的，但只调用 Task.cancel()——
+    // cancel 是 Sendable 且非隔离安全的方法，无需 main actor。这里有意不捕获其他可变状态。
     deinit {
         autoTurnTask?.cancel()
         initialLoadTask?.cancel()
@@ -145,10 +157,10 @@ final class ReaderViewModel: ObservableObject {
         } catch is CancellationError {
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
     }
-    
+
     @discardableResult
     func loadChapterImages(order: Int, startingPage: Int = 0, shouldManageLoading: Bool = true) async -> Bool {
         if shouldManageLoading {
@@ -177,7 +189,7 @@ final class ReaderViewModel: ObservableObject {
             errorMessage = nil
         } catch {
             stopAutoTurn()
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
         return false
     }
@@ -212,6 +224,11 @@ final class ReaderViewModel: ObservableObject {
     func seekToPage(_ index: Int) {
         guard !images.isEmpty else { return }
         updateCurrentPage(to: index)
+    }
+
+    /// View 在程序化滚动（scrollTo）完成后调用，清空 scrollTargetPage 以避免重复消费。
+    func consumeScrollTargetPage() {
+        scrollTargetPage = nil
     }
     
     func toggleToolbar() {

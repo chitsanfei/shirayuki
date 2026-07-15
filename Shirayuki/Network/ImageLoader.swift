@@ -21,20 +21,23 @@ actor ImageLoader {
     
     func loadImage(from urlString: String) async throws -> Data? {
         guard let url = URL(string: urlString) else { return nil }
+        let quality = AppImageQuality.stored
+        let cacheKey = "\(quality.rawValue)|\(urlString)"
         
-        if let cached = memoryCache[urlString] {
-            touchCache(for: urlString)
+        if let cached = memoryCache[cacheKey] {
+            touchCache(for: cacheKey)
             return cached
         }
         
         let task: Task<Data, Error>
-        if let existingTask = ongoingTasks[urlString] {
+        if let existingTask = ongoingTasks[cacheKey] {
             task = existingTask
         } else {
             task = Task(priority: .utility) { [session] in
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 20
                 request.setValue("image/webp,image/apng,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
+                request.setValue(quality.rawValue, forHTTPHeaderField: "image-quality")
                 
                 let (data, response) = try await session.data(for: request)
                 
@@ -45,20 +48,20 @@ actor ImageLoader {
                 
                 return data
             }
-            ongoingTasks[urlString] = task
+            ongoingTasks[cacheKey] = task
         }
         
         do {
             let data = try await task.value
-            ongoingTasks.removeValue(forKey: urlString)
-            if memoryCache[urlString] == nil {
-                setCache(key: urlString, data: data)
+            ongoingTasks.removeValue(forKey: cacheKey)
+            if memoryCache[cacheKey] == nil {
+                setCache(key: cacheKey, data: data)
             } else {
-                touchCache(for: urlString)
+                touchCache(for: cacheKey)
             }
             return data
         } catch {
-            ongoingTasks.removeValue(forKey: urlString)
+            ongoingTasks.removeValue(forKey: cacheKey)
             throw error
         }
     }
@@ -84,7 +87,8 @@ actor ImageLoader {
     func preload(urls: [String]) {
         let uniqueURLs = Array(Set(urls))
         for urlString in uniqueURLs {
-            guard memoryCache[urlString] == nil, ongoingTasks[urlString] == nil else { continue }
+            let cacheKey = "\(AppImageQuality.stored.rawValue)|\(urlString)"
+            guard memoryCache[cacheKey] == nil, ongoingTasks[cacheKey] == nil else { continue }
             Task(priority: .utility) {
                 _ = try? await loadImage(from: urlString)
             }

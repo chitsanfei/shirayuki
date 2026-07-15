@@ -27,6 +27,8 @@ nonisolated enum APIError: Error, Equatable, Sendable {
         case let (.encodingError(l), .encodingError(r)): return l == r
         case let (.serverError(l1, l2), .serverError(r1, r2)): return l1 == r1 && l2 == r2
         case let (.decodingError(l), .decodingError(r)): return l == r
+        case let (.networkError(l), .networkError(r)):
+            return (l as NSError).isEqual(r as NSError)
         default: return false
         }
     }
@@ -65,6 +67,9 @@ actor APIClient {
     private var baseURL: String = "https://picaapi.go2778.com/"
     private var token: String = ""
     private let session: URLSession
+    // 401 去抖：多个并发请求同时收到 401 时，只在窗口内首次发送 unauthorized 通知，
+    // 避免 AppState 被并发触发多次会话恢复。
+    private var lastUnauthorizedNotificationAt: Date?
     
     private init() {
         let configuration = URLSessionConfiguration.default
@@ -86,7 +91,7 @@ actor APIClient {
     func clearToken() {
         self.token = ""
     }
-    
+
     private var defaultHeaders: [String: String] {
         [
             "accept": "application/vnd.picacomic.com.v1+json",
@@ -124,8 +129,31 @@ actor APIClient {
     func request<T: Decodable & Sendable>(
         _ method: HTTPMethod,
         path: String,
+        query: [String: String]? = nil
+    ) async throws -> T {
+        try await request(method, path: path, query: query, bodyData: nil)
+    }
+
+    func request<T: Decodable & Sendable, Body: Encodable & Sendable>(
+        _ method: HTTPMethod,
+        path: String,
         query: [String: String]? = nil,
-        body: [String: Any]? = nil
+        body: Body
+    ) async throws -> T {
+        let bodyData: Data
+        do {
+            bodyData = try JSONEncoder().encode(body)
+        } catch {
+            throw APIError.encodingError(error.localizedDescription)
+        }
+        return try await request(method, path: path, query: query, bodyData: bodyData)
+    }
+
+    private func request<T: Decodable & Sendable>(
+        _ method: HTTPMethod,
+        path: String,
+        query: [String: String]?,
+        bodyData: Data?
     ) async throws -> T {
         let maxRetries = 3
         var lastError: Error?
@@ -133,7 +161,7 @@ actor APIClient {
         for attempt in 0..<maxRetries {
             try Task.checkCancellation()
             do {
-                return try await performRequest(method, path: path, query: query, body: body)
+                return try await performRequest(method, path: path, query: query, bodyData: bodyData)
             } catch is CancellationError {
                 throw CancellationError()
             } catch let error as APIError {
@@ -170,7 +198,7 @@ actor APIClient {
         _ method: HTTPMethod,
         path: String,
         query: [String: String]? = nil,
-        body: [String: Any]? = nil
+        bodyData: Data? = nil
     ) async throws -> T {
         try Task.checkCancellation()
 
@@ -213,12 +241,8 @@ actor APIClient {
             request.setValue(value, forHTTPHeaderField: key)
         }
         
-        if let body = body, method != .get {
-            do {
-                request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            } catch {
-                throw APIError.encodingError(error.localizedDescription)
-            }
+        if method != .get, let bodyData {
+            request.httpBody = bodyData
         }
         
         let (data, response): (Data, URLResponse)
@@ -252,8 +276,20 @@ actor APIClient {
             throw APIError.serverError(400, AppLocalization.text("api.badRequest"))
         case 401:
             token = ""
-            Task { @MainActor in
-                NotificationCenter.default.post(name: .apiClientDidReceiveUnauthorized, object: nil)
+            // 去抖：5 秒窗口内只发一次 unauthorized 通知，防止并发请求重复触发会话恢复。
+            let now = Date()
+            let shouldNotify: Bool = {
+                if let last = lastUnauthorizedNotificationAt,
+                   now.timeIntervalSince(last) < 5 {
+                    return false
+                }
+                return true
+            }()
+            if shouldNotify {
+                lastUnauthorizedNotificationAt = now
+                Task { @MainActor in
+                    NotificationCenter.default.post(name: .apiClientDidReceiveUnauthorized, object: nil)
+                }
             }
             throw APIError.unauthorized
         default:
