@@ -19,6 +19,7 @@ struct ComicDetailView: View {
     @State private var routedComicId: String?
     @State private var showAllChapters = false
     @State private var chapterSortOrder: ChapterSortOrder = .ascending
+    @State private var showDownloadOptions = false
     init(comicId: String) {
         self.comicId = comicId
         _viewModel = StateObject(wrappedValue: ComicDetailViewModel(comicId: comicId))
@@ -93,6 +94,14 @@ struct ComicDetailView: View {
             )
         }
         #endif
+        .sheet(isPresented: $showDownloadOptions) {
+            DownloadOptionsSheet(
+                chapters: viewModel.chapters,
+                downloadedChapterIDs: viewModel.offlineChapterIDs
+            ) { quality, selectedChapters in
+                viewModel.startDownload(quality: quality, chapters: selectedChapters)
+            }
+        }
         .task(id: comicId) {
             await viewModel.loadDetail()
         }
@@ -193,7 +202,9 @@ struct ComicDetailView: View {
             Divider().frame(height: 40)
             StatBlock(value: "\(comic.commentsCount)", title: localization.text("detail.stats.comments"))
             Divider().frame(height: 40)
-            StatBlock(value: comic.updatedAt.prefix(10).description, title: localization.text("detail.stats.updated"))
+            StatBlock(value: displayDate(comic.updatedAt), title: localization.text("detail.stats.updated"))
+            Divider().frame(height: 40)
+            StatBlock(value: displayDate(comic.createdAt), title: localization.text("detail.stats.created"))
         }
         .padding(.vertical, 14)
         .background(
@@ -248,8 +259,8 @@ struct ComicDetailView: View {
                 }
 
                 HStack(spacing: 10) {
-                    MetaChip(icon: "clock", text: localization.text("detail.meta.updated", comic.updatedAt.prefix(10).description))
-                    MetaChip(icon: "calendar", text: localization.text("detail.meta.created", comic.createdAt.prefix(10).description))
+                    MetaChip(icon: "clock", text: localization.text("detail.meta.updated", displayDate(comic.updatedAt)))
+                    MetaChip(icon: "calendar", text: localization.text("detail.meta.created", displayDate(comic.createdAt)))
                 }
 
                 HStack(spacing: 10) {
@@ -307,7 +318,7 @@ struct ComicDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(localization.text("detail.section.actions"))
             
-            HStack(spacing: 12) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 Button {
                     Task { await viewModel.toggleLike() }
                 } label: {
@@ -332,6 +343,53 @@ struct ComicDetailView: View {
                 }
                 .buttonStyle(.plain)
                 
+                Button {
+                    showDownloadOptions = true
+                } label: {
+                    switch viewModel.downloadState {
+                    case let .downloading(completedImages, totalImages):
+                        VStack(spacing: 7) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.down.circle.fill")
+                                if totalImages > 0 {
+                                    Text(localization.text("detail.download.progress", completedImages, totalImages))
+                                } else {
+                                    Text(localization.text("detail.download.preparing"))
+                                }
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                            if totalImages > 0 {
+                                ProgressView(value: Double(completedImages), total: Double(totalImages))
+                                    .tint(.orange)
+                            } else {
+                                ProgressView()
+                                    .tint(.orange)
+                            }
+                        }
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.orange.opacity(0.14))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    case .completed where viewModel.isFullyOffline:
+                        ActionButtonLabel(
+                            icon: "checkmark.circle.fill",
+                            title: localization.text("detail.action.downloaded"),
+                            isFilled: true,
+                            tint: .orange
+                        )
+                    default:
+                        ActionButtonLabel(
+                            icon: "arrow.down.circle.fill",
+                            title: localization.text("detail.action.download"),
+                            isFilled: false,
+                            tint: .orange
+                        )
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(!comic.allowDownload || isDownloading)
+
                 Button {
                     if let progress = viewModel.readProgress {
                         startReading(
@@ -362,6 +420,11 @@ struct ComicDetailView: View {
             }
             .padding(.horizontal, 16)
         }
+    }
+
+    private var isDownloading: Bool {
+        if case .downloading = viewModel.downloadState { return true }
+        return false
     }
 
     @ViewBuilder
@@ -475,6 +538,14 @@ struct ComicDetailView: View {
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .stroke(Color.white.opacity(0.05), lineWidth: 1)
                             )
+                            .overlay(alignment: .topTrailing) {
+                                if viewModel.offlineChapterIDs.contains(entry.chapter.id) {
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 9, height: 9)
+                                        .padding(9)
+                                }
+                            }
                         }
                         .buttonStyle(.plain)
                     }
@@ -560,6 +631,12 @@ struct ComicDetailView: View {
             .font(.system(size: 20, weight: .bold))
             .foregroundStyle(.primary)
             .padding(.horizontal, 16)
+    }
+
+    private func displayDate(_ rawValue: String) -> String {
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return "—" }
+        return String(value.prefix(10))
     }
     
     private func detailErrorState(message: String) -> some View {
@@ -681,5 +758,151 @@ private struct MetaChip: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.white.opacity(0.04))
         )
+    }
+}
+
+private struct DownloadOptionsSheet: View {
+    let chapters: [PicaChapter]
+    let downloadedChapterIDs: Set<String>
+    let onConfirm: (AppImageQuality, [PicaChapter]) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var localization = AppLocalization.shared
+    @State private var quality = AppImageQuality.stored
+    @State private var selectedChapterIDs: Set<String>
+
+    init(
+        chapters: [PicaChapter],
+        downloadedChapterIDs: Set<String>,
+        onConfirm: @escaping (AppImageQuality, [PicaChapter]) -> Void
+    ) {
+        self.chapters = chapters
+        self.downloadedChapterIDs = downloadedChapterIDs
+        self.onConfirm = onConfirm
+        _selectedChapterIDs = State(initialValue: Set(chapters.map(\.id)))
+    }
+
+    private var allSelected: Bool {
+        !chapters.isEmpty && selectedChapterIDs.count == chapters.count
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(localization.text("detail.download.quality"))
+                        .font(.title3.weight(.bold))
+
+                    ForEach(AppImageQuality.allCases) { item in
+                        Button {
+                            quality = item
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text(item.displayName)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                Image(systemName: quality == item ? "checkmark.circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundStyle(quality == item ? Color.accentColor : Color.secondary)
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(quality == item ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(quality == item ? Color.accentColor.opacity(0.35) : Color.clear, lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    HStack {
+                        Text(localization.text("detail.download.chapters"))
+                            .font(.title3.weight(.bold))
+                        Spacer()
+                        Button(
+                            allSelected
+                            ? localization.text("detail.download.deselectAll")
+                            : localization.text("detail.download.selectAll")
+                        ) {
+                            selectedChapterIDs = allSelected ? [] : Set(chapters.map(\.id))
+                        }
+                        .font(.system(size: 13, weight: .semibold))
+                    }
+
+                    Text(localization.text("detail.download.selected", selectedChapterIDs.count, chapters.count))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
+
+                    ForEach(chapters, id: \.id) { chapter in
+                        Button {
+                            if selectedChapterIDs.contains(chapter.id) {
+                                selectedChapterIDs.remove(chapter.id)
+                            } else {
+                                selectedChapterIDs.insert(chapter.id)
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(chapter.title)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(2)
+                                    Text(localization.text("detail.chapters.item", chapter.order))
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if downloadedChapterIDs.contains(chapter.id) {
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 8, height: 8)
+                                }
+                                Image(systemName: selectedChapterIDs.contains(chapter.id) ? "checkmark.circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundStyle(selectedChapterIDs.contains(chapter.id) ? Color.accentColor : Color.secondary)
+                            }
+                            .padding(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(selectedChapterIDs.contains(chapter.id) ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Button {
+                        onConfirm(quality, chapters.filter { selectedChapterIDs.contains($0.id) })
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text(localization.text("detail.download.confirm"))
+                                .font(.system(size: 16, weight: .bold))
+                            Spacer()
+                            Image(systemName: "arrow.down")
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .padding(.horizontal, 18)
+                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .disabled(selectedChapterIDs.isEmpty)
+                    .opacity(selectedChapterIDs.isEmpty ? 0.5 : 1)
+                }
+                .padding(20)
+            }
+            .navigationTitle(localization.text("detail.action.download"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(localization.text("common.cancel")) { dismiss() }
+                }
+            }
+        }
     }
 }

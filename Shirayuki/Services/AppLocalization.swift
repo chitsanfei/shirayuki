@@ -501,10 +501,22 @@ nonisolated private enum AppLocalizationCatalog {
             .japanese: "設定"
         ],
         "profile.settings.subtitle": [
-            .simplifiedChinese: "主题、缓存与应用信息",
-            .traditionalChinese: "主題、快取與應用程式資訊",
-            .english: "Theme, cache, and app info.",
-            .japanese: "テーマ、キャッシュ、アプリ情報"
+            .simplifiedChinese: "主题、储存与应用信息",
+            .traditionalChinese: "主題、儲存與應用程式資訊",
+            .english: "Theme, storage, and app info.",
+            .japanese: "テーマ、ストレージ、アプリ情報"
+        ],
+        "profile.offline": [
+            .simplifiedChinese: "离线漫画",
+            .traditionalChinese: "離線漫畫",
+            .english: "Offline Comics",
+            .japanese: "オフライン漫画"
+        ],
+        "profile.offline.subtitle": [
+            .simplifiedChinese: "管理已下载的漫画",
+            .traditionalChinese: "管理已下載的漫畫",
+            .english: "Manage downloaded comics",
+            .japanese: "ダウンロード済み漫画を管理"
         ],
         "profile.logout": [
             .simplifiedChinese: "退出登录",
@@ -530,6 +542,12 @@ nonisolated private enum AppLocalizationCatalog {
             .english: "Appearance",
             .japanese: "外観"
         ],
+        "settings.appearance.subtitle": [
+            .simplifiedChinese: "主题与语言",
+            .traditionalChinese: "主題與語言",
+            .english: "Theme and language",
+            .japanese: "テーマと言語"
+        ],
         "settings.theme": [
             .simplifiedChinese: "暗黑模式",
             .traditionalChinese: "深色模式",
@@ -542,11 +560,53 @@ nonisolated private enum AppLocalizationCatalog {
             .english: "Language",
             .japanese: "言語"
         ],
+        "settings.reading": [
+            .simplifiedChinese: "阅读设置",
+            .traditionalChinese: "閱讀設定",
+            .english: "Reading",
+            .japanese: "読書設定"
+        ],
+        "settings.reading.subtitle": [
+            .simplifiedChinese: "方向、显示与自动翻页",
+            .traditionalChinese: "方向、顯示與自動翻頁",
+            .english: "Direction, display, and auto-turn",
+            .japanese: "方向、表示、自動ページ送り"
+        ],
         "settings.network": [
             .simplifiedChinese: "网络线路",
             .traditionalChinese: "網路線路",
             .english: "Network Route",
             .japanese: "ネットワーク経路"
+        ],
+        "settings.network.subtitle": [
+            .simplifiedChinese: "选择线路或管理代理配置",
+            .traditionalChinese: "選擇線路或管理代理設定",
+            .english: "Choose a route or manage proxy configurations",
+            .japanese: "経路の選択とプロキシ設定"
+        ],
+        "settings.network.selection": [
+            .simplifiedChinese: "配置选择",
+            .traditionalChinese: "設定選擇",
+            .english: "Configuration Selection",
+            .japanese: "設定の選択"
+        ],
+        "settings.network.selection.subtitle": [
+            .simplifiedChinese: "选择当前使用的网络线路",
+            .traditionalChinese: "選擇目前使用的網路線路",
+            .english: "Choose the active network route",
+            .japanese: "使用するネットワーク経路を選択"
+        ],
+        "settings.network.modify": [
+            .simplifiedChinese: "配置修改",
+            .traditionalChinese: "設定修改",
+            .english: "Configuration Editing",
+            .japanese: "設定の編集"
+        ],
+        "settings.network.modify.subtitle": [
+            .simplifiedChinese: "添加或编辑 HTTP/HTTPS 代理配置",
+            .traditionalChinese: "新增或編輯 HTTP/HTTPS 代理設定",
+            .english: "Add or edit HTTP/HTTPS proxy configurations",
+            .japanese: "HTTP/HTTPSプロキシ設定を追加または編集"
         ],
         "settings.proxy.title": [
             .simplifiedChinese: "代理规则",
@@ -609,10 +669,16 @@ nonisolated private enum AppLocalizationCatalog {
             .japanese: "名前と有効なHTTP/HTTPS URLを入力してください。"
         ],
         "settings.rank.title": [
-            .simplifiedChinese: "榜单卡片",
-            .traditionalChinese: "榜單卡片",
-            .english: "Ranking Cards",
-            .japanese: "ランキングカード"
+            .simplifiedChinese: "卡片",
+            .traditionalChinese: "卡片",
+            .english: "Cards",
+            .japanese: "カード"
+        ],
+        "settings.rank.subtitle": [
+            .simplifiedChinese: "榜单卡片显示的分类与标签",
+            .traditionalChinese: "榜單卡片顯示的分類與標籤",
+            .english: "Categories and tags shown on ranking cards",
+            .japanese: "ランキングカードに表示するカテゴリとタグ"
         ],
         "settings.rank.display": [
             .simplifiedChinese: "信息类型",
@@ -639,10 +705,40 @@ nonisolated private enum AppLocalizationCatalog {
             .japanese: "最大表示数"
         ],
         "settings.cache": [
-            .simplifiedChinese: "缓存",
-            .traditionalChinese: "快取",
-            .english: "Cache",
-            .japanese: "キャッシュ"
+            .simplifiedChinese: "储存",
+            .traditionalChinese: "儲存",
+            .english: "Storage",
+            .japanese: "ストレージ"
+        ],
+        "settings.cache.subtitle": [
+            .simplifiedChinese: "清理已缓存的漫画图片",
+            .traditionalChinese: "清除已快取的漫畫圖片",
+            .english: "Clear cached comic images",
+            .japanese: "キャッシュ済みの漫画画像を削除"
+        ],
+        "settings.storage.cache": [
+            .simplifiedChinese: "图片缓存",
+            .traditionalChinese: "圖片快取",
+            .english: "Image Cache",
+            .japanese: "画像キャッシュ"
+        ],
+        "settings.storage.offline": [
+            .simplifiedChinese: "离线漫画",
+            .traditionalChinese: "離線漫畫",
+            .english: "Offline Comics",
+            .japanese: "オフライン漫画"
+        ],
+        "settings.storage.offline.manage": [
+            .simplifiedChinese: "管理离线漫画",
+            .traditionalChinese: "管理離線漫畫",
+            .english: "Manage Offline Comics",
+            .japanese: "オフライン漫画を管理"
+        ],
+        "settings.storage.offline.clear": [
+            .simplifiedChinese: "清理离线漫画",
+            .traditionalChinese: "清理離線漫畫",
+            .english: "Delete Offline Comics",
+            .japanese: "オフライン漫画を削除"
         ],
         "settings.cache.clear": [
             .simplifiedChinese: "清理图片缓存",
@@ -667,6 +763,12 @@ nonisolated private enum AppLocalizationCatalog {
             .traditionalChinese: "程式碼與授權",
             .english: "Code and License",
             .japanese: "コードとライセンス"
+        ],
+        "settings.source.subtitle": [
+            .simplifiedChinese: "仓库、许可与第三方说明",
+            .traditionalChinese: "倉庫、授權與第三方說明",
+            .english: "Repository, license, and third-party notices",
+            .japanese: "リポジトリ、ライセンス、第三者通知"
         ],
         "settings.deviceCode": [
             .simplifiedChinese: "本机代码",
@@ -697,6 +799,12 @@ nonisolated private enum AppLocalizationCatalog {
             .traditionalChinese: "關於",
             .english: "About",
             .japanese: "情報"
+        ],
+        "settings.about.subtitle": [
+            .simplifiedChinese: "版本与运行环境",
+            .traditionalChinese: "版本與執行環境",
+            .english: "Version and runtime environment",
+            .japanese: "バージョンと実行環境"
         ],
         "settings.version": [
             .simplifiedChinese: "版本",
@@ -890,6 +998,36 @@ nonisolated private enum AppLocalizationCatalog {
             .english: "Interval",
             .japanese: "間隔"
         ],
+        "reader.settings.offline": [
+            .simplifiedChinese: "离线阅读",
+            .traditionalChinese: "離線閱讀",
+            .english: "Offline Reading",
+            .japanese: "オフライン読書"
+        ],
+        "reader.settings.ignoreOffline": [
+            .simplifiedChinese: "忽略离线漫画",
+            .traditionalChinese: "忽略離線漫畫",
+            .english: "Ignore Offline Comics",
+            .japanese: "オフライン漫画を無視"
+        ],
+        "reader.settings.downloadWhileReading": [
+            .simplifiedChinese: "边读边下",
+            .traditionalChinese: "邊讀邊下載",
+            .english: "Download While Reading",
+            .japanese: "読みながらダウンロード"
+        ],
+        "reader.offline.using": [
+            .simplifiedChinese: "已加载离线版本",
+            .traditionalChinese: "已載入離線版本",
+            .english: "Loaded offline version",
+            .japanese: "オフライン版を読み込みました"
+        ],
+        "reader.offline.usingOnline": [
+            .simplifiedChinese: "离线版本质量不足，已加载在线版本",
+            .traditionalChinese: "離線版本品質不足，已載入線上版本",
+            .english: "Offline quality is insufficient; loaded online version",
+            .japanese: "オフライン版の品質不足のためオンライン版を読み込みました"
+        ],
         "reader.chapterList": [
             .simplifiedChinese: "章节列表",
             .traditionalChinese: "章節列表",
@@ -1052,6 +1190,12 @@ nonisolated private enum AppLocalizationCatalog {
             .english: "Start Reading",
             .japanese: "読み始める"
         ],
+        "detail.stats.created": [
+            .simplifiedChinese: "创建",
+            .traditionalChinese: "建立",
+            .english: "Created",
+            .japanese: "作成"
+        ],
         "detail.section.progress": [
             .simplifiedChinese: "阅读进度",
             .traditionalChinese: "閱讀進度",
@@ -1075,6 +1219,72 @@ nonisolated private enum AppLocalizationCatalog {
             .traditionalChinese: "繼續閱讀",
             .english: "Continue Reading",
             .japanese: "続きを読む"
+        ],
+        "detail.action.download": [
+            .simplifiedChinese: "下载漫画",
+            .traditionalChinese: "下載漫畫",
+            .english: "Download",
+            .japanese: "漫画をダウンロード"
+        ],
+        "detail.action.downloaded": [
+            .simplifiedChinese: "已下载",
+            .traditionalChinese: "已下載",
+            .english: "Downloaded",
+            .japanese: "ダウンロード済み"
+        ],
+        "detail.download.quality": [
+            .simplifiedChinese: "下载图片质量",
+            .traditionalChinese: "下載圖片品質",
+            .english: "Download Image Quality",
+            .japanese: "ダウンロード画質"
+        ],
+        "detail.download.chapters": [
+            .simplifiedChinese: "选择章节",
+            .traditionalChinese: "選擇章節",
+            .english: "Select Chapters",
+            .japanese: "チャプターを選択"
+        ],
+        "detail.download.selectAll": [
+            .simplifiedChinese: "全选",
+            .traditionalChinese: "全選",
+            .english: "Select All",
+            .japanese: "すべて選択"
+        ],
+        "detail.download.deselectAll": [
+            .simplifiedChinese: "取消全选",
+            .traditionalChinese: "取消全選",
+            .english: "Deselect All",
+            .japanese: "すべて解除"
+        ],
+        "detail.download.selected": [
+            .simplifiedChinese: "已选择 %d/%d 话",
+            .traditionalChinese: "已選擇 %d/%d 話",
+            .english: "%d/%d chapters selected",
+            .japanese: "%d/%d話を選択中"
+        ],
+        "detail.download.confirm": [
+            .simplifiedChinese: "确认下载",
+            .traditionalChinese: "確認下載",
+            .english: "Confirm Download",
+            .japanese: "ダウンロードを確認"
+        ],
+        "detail.download.progress": [
+            .simplifiedChinese: "已下载 %d/%d 张图片",
+            .traditionalChinese: "已下載 %d/%d 張圖片",
+            .english: "%d/%d images downloaded",
+            .japanese: "%d/%d枚をダウンロード済み"
+        ],
+        "detail.download.preparing": [
+            .simplifiedChinese: "正在准备下载",
+            .traditionalChinese: "正在準備下載",
+            .english: "Preparing download",
+            .japanese: "ダウンロードを準備中"
+        ],
+        "detail.download.confirm.title": [
+            .simplifiedChinese: "确认下载整部漫画？",
+            .traditionalChinese: "確認下載整部漫畫？",
+            .english: "Download the entire comic?",
+            .japanese: "漫画全体をダウンロードしますか？"
         ],
         "detail.section.chapters": [
             .simplifiedChinese: "目录",
@@ -1213,6 +1423,78 @@ nonisolated private enum AppLocalizationCatalog {
             .traditionalChinese: "原畫",
             .english: "Original",
             .japanese: "原画"
+        ],
+        "offline.title": [
+            .simplifiedChinese: "离线漫画",
+            .traditionalChinese: "離線漫畫",
+            .english: "Offline Comics",
+            .japanese: "オフライン漫画"
+        ],
+        "offline.empty": [
+            .simplifiedChinese: "暂无离线漫画",
+            .traditionalChinese: "暫無離線漫畫",
+            .english: "No offline comics",
+            .japanese: "オフライン漫画はありません"
+        ],
+        "offline.empty.subtitle": [
+            .simplifiedChinese: "在漫画详情页下载后会显示在这里",
+            .traditionalChinese: "在漫畫詳情頁下載後會顯示在這裡",
+            .english: "Downloaded comics will appear here.",
+            .japanese: "漫画詳細からダウンロードするとここに表示されます"
+        ],
+        "offline.detail": [
+            .simplifiedChinese: "%d 话 · %d 张图片",
+            .traditionalChinese: "%d 話 · %d 張圖片",
+            .english: "%d chapters · %d images",
+            .japanese: "%d話 ・ %d枚"
+        ],
+        "offline.quality": [
+            .simplifiedChinese: "质量：%@",
+            .traditionalChinese: "品質：%@",
+            .english: "Quality: %@",
+            .japanese: "画質：%@"
+        ],
+        "offline.downloading": [
+            .simplifiedChinese: "正在下载 %d/%d 张图片",
+            .traditionalChinese: "正在下載 %d/%d 張圖片",
+            .english: "Downloading %d/%d images",
+            .japanese: "%d/%d枚をダウンロード中"
+        ],
+        "offline.read": [
+            .simplifiedChinese: "阅读",
+            .traditionalChinese: "閱讀",
+            .english: "Read",
+            .japanese: "読む"
+        ],
+        "offline.redownload": [
+            .simplifiedChinese: "重新下载",
+            .traditionalChinese: "重新下載",
+            .english: "Redownload",
+            .japanese: "再ダウンロード"
+        ],
+        "offline.delete": [
+            .simplifiedChinese: "删除",
+            .traditionalChinese: "刪除",
+            .english: "Delete",
+            .japanese: "削除"
+        ],
+        "offline.upgrade": [
+            .simplifiedChinese: "升级质量",
+            .traditionalChinese: "升級品質",
+            .english: "Upgrade Quality",
+            .japanese: "画質をアップグレード"
+        ],
+        "offline.confirm": [
+            .simplifiedChinese: "确认下载",
+            .traditionalChinese: "確認下載",
+            .english: "Confirm Download",
+            .japanese: "ダウンロードを確認"
+        ],
+        "offline.confirm.title": [
+            .simplifiedChinese: "确认更新离线漫画？",
+            .traditionalChinese: "確認更新離線漫畫？",
+            .english: "Update this offline comic?",
+            .japanese: "オフライン漫画を更新しますか？"
         ]
     ]
 }

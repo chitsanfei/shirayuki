@@ -6,6 +6,8 @@ import SwiftUI
 final class SettingsViewModel: ObservableObject {
     @Published var isClearingCache = false
     @Published var cacheMessage: String?
+    @Published var imageCacheSize = 0
+    @Published var offlineStorageSize = 0
     @Published var proxyName = ""
     @Published var proxyURL = ""
     @Published var editingProxyID: String?
@@ -22,6 +24,7 @@ final class SettingsViewModel: ObservableObject {
         imageQuality = AppImageQuality.stored
         rankDisplay = AppRankDisplayStore.shared.display
         rankMaxTagCount = AppRankDisplayStore.shared.maxTagCount
+        refreshStorageUsage()
     }
     
     func clearCache() {
@@ -32,8 +35,26 @@ final class SettingsViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 300_000_000)
             await MainActor.run {
                 self.isClearingCache = false
+                self.imageCacheSize = 0
                 self.cacheMessage = AppLocalization.shared.text("settings.cache.cleared")
             }
+        }
+    }
+
+    func refreshStorageUsage() {
+        Task {
+            async let cacheSize = ImageLoader.shared.cacheSize()
+            async let offlineSize = OfflineComicStore.shared.storageSize()
+            let (cache, offline) = await (cacheSize, offlineSize)
+            imageCacheSize = cache
+            offlineStorageSize = offline
+        }
+    }
+
+    func clearOfflineStorage() {
+        Task {
+            try? await OfflineComicStore.shared.deleteAll()
+            refreshStorageUsage()
         }
     }
     
@@ -49,19 +70,21 @@ final class SettingsViewModel: ObservableObject {
         proxyMessage = nil
     }
 
-    func saveProxyRule() {
+    @discardableResult
+    func saveProxyRule() -> Bool {
         guard AppProxyStore.shared.saveUserRule(
             id: editingProxyID,
             name: proxyName,
             urlString: proxyURL
         ) else {
             proxyMessage = AppLocalization.text("settings.proxy.invalid")
-            return
+            return false
         }
         proxyName = ""
         proxyURL = ""
         editingProxyID = nil
         proxyMessage = nil
+        return true
     }
 
     func cancelEditingProxy() {

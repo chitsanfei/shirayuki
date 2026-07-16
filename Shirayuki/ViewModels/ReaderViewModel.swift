@@ -18,6 +18,7 @@ enum ReadMode: String, CaseIterable, Identifiable {
 @MainActor
 final class ReaderViewModel: ObservableViewModel {
     @Published var comic: ComicDetail
+    let offlineOnly: Bool
     @Published var chapters: [PicaChapter] = []
     @Published var currentChapterIndex: Int = 0
     @Published var images: [ChapterImage] = []
@@ -34,17 +35,33 @@ final class ReaderViewModel: ObservableViewModel {
         if clamped != currentPageIndex {
             currentPageIndex = clamped
             preloadAdjacentImages()
+            scheduleAutomaticDownloadIfNeeded()
         }
     }
     @Published var currentChapterTitle: String = ""
     @Published var readMode: ReadMode = .vertical {
         didSet {
             scrollTargetPage = currentPageIndex
+            if readMode != oldValue {
+                AppReaderSettingsStore.shared.setReadMode(readMode)
+            }
         }
     }
     @Published var showToolbar = false
-    @Published var showPageNumbers = true
-    @Published var isMenuLocked = false
+    @Published var showPageNumbers = true {
+        didSet {
+            if showPageNumbers != oldValue {
+                AppReaderSettingsStore.shared.setShowPageNumbers(showPageNumbers)
+            }
+        }
+    }
+    @Published var isMenuLocked = false {
+        didSet {
+            if isMenuLocked != oldValue {
+                AppReaderSettingsStore.shared.setMenuLocked(isMenuLocked)
+            }
+        }
+    }
     @Published var imageQuality: AppImageQuality = AppImageQuality.stored {
         didSet {
             if imageQuality != oldValue {
@@ -55,8 +72,15 @@ final class ReaderViewModel: ObservableViewModel {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var isAutoTurning = false
-    @Published var autoTurnInterval: Double = 5
+    @Published var autoTurnInterval: Double = 5 {
+        didSet {
+            if autoTurnInterval != oldValue {
+                AppReaderSettingsStore.shared.setAutoTurnInterval(autoTurnInterval)
+            }
+        }
+    }
     @Published var scrollTargetPage: Int?
+    @Published var offlineSourceMessage: String?
     
     var currentChapter: PicaChapter? {
         guard currentChapterIndex < chapters.count else { return nil }
@@ -72,6 +96,7 @@ final class ReaderViewModel: ObservableViewModel {
     private var initialLoadTask: Task<Void, Never>?
     private var progressSaveTask: Task<Void, Never>?
     private var preloadTask: Task<Void, Never>?
+    private var scheduledAutomaticDownloadChapterIDs = Set<String>()
     private let initialChapters: [PicaChapter]
     private let initialChapterIndex: Int
     private let initialChapterId: String?
@@ -84,9 +109,15 @@ final class ReaderViewModel: ObservableViewModel {
         initialChapterIndex: Int = 0,
         initialChapterId: String? = nil,
         initialChapterOrder: Int? = nil,
-        initialPageIndex: Int = 0
+        initialPageIndex: Int = 0,
+        offlineOnly: Bool = false
     ) {
         self.comic = comic
+        self.offlineOnly = offlineOnly
+        self.readMode = AppReaderSettingsStore.shared.readMode
+        self.showPageNumbers = AppReaderSettingsStore.shared.showPageNumbers
+        self.isMenuLocked = AppReaderSettingsStore.shared.isMenuLocked
+        self.autoTurnInterval = AppReaderSettingsStore.shared.autoTurnInterval
         self.initialChapters = initialChapters
         self.initialChapterIndex = initialChapterIndex
         self.initialChapterId = initialChapterId
@@ -157,7 +188,18 @@ final class ReaderViewModel: ObservableViewModel {
         } catch is CancellationError {
             errorMessage = nil
         } catch {
-            handleError(error)
+            if (offlineOnly || !AppReaderSettingsStore.shared.ignoresOfflineContent),
+               let record = await OfflineComicStore.shared.record(for: comic.id),
+               !record.chapters.isEmpty {
+                chapters = record.chapters.map {
+                    PicaChapter(uid: $0.id, title: $0.title, order: $0.order, id: $0.id)
+                }.sorted { $0.order < $1.order }
+                announceOfflineSource(.offline)
+                let startIndex = resolvedInitialChapterIndex(in: chapters)
+                _ = await loadChapter(at: startIndex, startingPage: initialPageIndex, shouldManageLoading: false)
+            } else {
+                handleError(error)
+            }
         }
     }
 
@@ -172,22 +214,78 @@ final class ReaderViewModel: ObservableViewModel {
                 isLoading = false
             }
         }
+
+        if offlineOnly,
+           let chapterID = currentChapter?.id,
+           let chapter = await OfflineComicStore.shared.offlineChapter(
+               comicID: comic.id,
+               chapterID: chapterID,
+               quality: AppImageQuality.stored
+           ) {
+            images = chapter.images.map { ChapterImage(uid: $0.id, id: $0.id, offlineURL: $0.url) }
+            currentChapterTitle = chapter.title
+            currentPageIndex = min(max(startingPage, 0), max(0, images.count - 1))
+            scrollTargetPage = images.isEmpty ? nil : currentPageIndex
+            preloadAdjacentImages()
+            announceOfflineSource(.offline)
+            scheduleAutomaticDownloadIfNeeded()
+            return true
+        }
         
         do {
             let (imgs, title) = try await PicaAPIService.shared.fetchChapterImages(
                 id: comic.id,
                 order: order
             )
-            images = imgs
-            currentChapterTitle = title
-            let clampedPage = min(max(startingPage, 0), max(0, imgs.count - 1))
+            let desiredQuality = AppImageQuality.stored
+            let source: OfflineImageSource = (offlineOnly || !AppReaderSettingsStore.shared.ignoresOfflineContent)
+                ? await OfflineComicStore.shared.source(
+                    comicID: comic.id,
+                    chapterID: currentChapter?.id ?? "",
+                    quality: desiredQuality,
+                    expectedImageCount: imgs.count
+                )
+                : .none
+
+            if source == .offline,
+               let chapter = await OfflineComicStore.shared.offlineChapter(
+                   comicID: comic.id,
+                   chapterID: currentChapter?.id ?? "",
+                   quality: desiredQuality
+               ) {
+                images = chapter.images.map { ChapterImage(uid: $0.id, id: $0.id, offlineURL: $0.url) }
+                currentChapterTitle = chapter.title
+                announceOfflineSource(.offline)
+            } else {
+                images = imgs
+                currentChapterTitle = title
+                if source == .online {
+                    announceOfflineSource(.online)
+                }
+            }
+            let clampedPage = min(max(startingPage, 0), max(0, images.count - 1))
             currentPageIndex = clampedPage
-            scrollTargetPage = imgs.isEmpty ? nil : clampedPage
+            scrollTargetPage = images.isEmpty ? nil : clampedPage
             preloadAdjacentImages()
+            scheduleAutomaticDownloadIfNeeded()
             return true
         } catch is CancellationError {
             errorMessage = nil
         } catch {
+            if (offlineOnly || !AppReaderSettingsStore.shared.ignoresOfflineContent),
+               let chapterID = currentChapter?.id,
+               let chapter = await OfflineComicStore.shared.offlineChapter(
+                   comicID: comic.id,
+                   chapterID: chapterID,
+                   quality: AppImageQuality.stored
+               ) {
+                images = chapter.images.map { ChapterImage(uid: $0.id, id: $0.id, offlineURL: $0.url) }
+                currentChapterTitle = chapter.title
+                currentPageIndex = min(max(startingPage, 0), max(0, images.count - 1))
+                scrollTargetPage = images.isEmpty ? nil : currentPageIndex
+                announceOfflineSource(.offline)
+                return true
+            }
             stopAutoTurn()
             handleError(error)
         }
@@ -271,7 +369,7 @@ final class ReaderViewModel: ObservableViewModel {
     }
     
     func preloadAdjacentImages() {
-        guard !images.isEmpty else { return }
+        guard !images.isEmpty, !offlineOnly else { return }
         let start = max(0, currentPageIndex - 1)
         let end = min(images.count - 1, currentPageIndex + 3)
         let urls = (start...end).map { images[$0].url }
@@ -333,6 +431,7 @@ final class ReaderViewModel: ObservableViewModel {
             scrollTargetPage = clampedIndex
         }
         preloadAdjacentImages()
+        scheduleAutomaticDownloadIfNeeded()
     }
 
     private func advanceToNextPage() async {
@@ -384,5 +483,47 @@ final class ReaderViewModel: ObservableViewModel {
             chapterOrder: chapter.order,
             pageIndex: currentPageIndex
         )
+    }
+
+    private func announceOfflineSource(_ source: OfflineImageSource) {
+        let key: String?
+        switch source {
+        case .none:
+            key = nil
+        case .offline:
+            key = "reader.offline.using"
+        case .online:
+            key = "reader.offline.usingOnline"
+        }
+        guard let key else { return }
+        let message = AppLocalization.text(key)
+        offlineSourceMessage = message
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            guard let self, self.offlineSourceMessage == message else { return }
+            self.offlineSourceMessage = nil
+        }
+    }
+
+    private func scheduleAutomaticDownloadIfNeeded() {
+        guard !offlineOnly,
+              !images.isEmpty,
+              isLastPage,
+              AppReaderSettingsStore.shared.downloadsWhileReading,
+              let chapter = currentChapter,
+              scheduledAutomaticDownloadChapterIDs.insert(chapter.id).inserted else { return }
+        let comic = comic
+        let quality = AppImageQuality.stored
+        Task(priority: .utility) {
+            try? await OfflineComicStore.shared.download(
+                comicID: comic.id,
+                title: comic.title,
+                thumbURL: comic.thumb.url,
+                createdAt: comic.createdAt,
+                updatedAt: comic.updatedAt,
+                chapters: [chapter],
+                quality: quality
+            )
+        }
     }
 }

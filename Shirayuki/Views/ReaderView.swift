@@ -31,6 +31,10 @@ struct ReaderView: View {
                             Spacer()
                         }
                     }
+                    .opacity(shouldShowBottomToolbar ? 0 : 1)
+                    .offset(y: shouldShowBottomToolbar ? 10 : 0)
+                    .allowsHitTesting(!shouldShowBottomToolbar)
+                    .animation(.easeInOut(duration: 0.2), value: shouldShowBottomToolbar)
                 }
                 
                 ReaderTopToolbar(
@@ -47,6 +51,21 @@ struct ReaderView: View {
                     isVisible: shouldShowBottomToolbar,
                     onChapterTap: { showChapterSheet = true }
                 )
+
+                if let message = viewModel.offlineSourceMessage {
+                    VStack {
+                        Spacer()
+                        Text(message)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(.black.opacity(0.72), in: Capsule())
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            .padding(.bottom, geometry.safeAreaInsets.bottom + 90)
+                    }
+                    .animation(.spring(response: 0.3), value: viewModel.offlineSourceMessage)
+                }
             }
             .ignoresSafeArea()
             #if os(iOS)
@@ -150,7 +169,13 @@ struct VerticalReader: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(viewModel.images.enumerated()), id: \.element.uid) { index, image in
-                            ComicAsyncImage(url: image.url)
+                            ComicAsyncImage(
+                                url: image.url,
+                                offlineComicID: viewModel.comic.id,
+                                offlineChapterID: viewModel.currentChapter?.id,
+                                expectedOfflineImageCount: viewModel.images.count,
+                                forceOffline: viewModel.offlineOnly
+                            )
                                 .aspectRatio(contentMode: .fit)
                                 .frame(maxWidth: .infinity)
                                 .scaleEffect(scale)
@@ -263,7 +288,13 @@ struct HorizontalReader: View {
             )
         ) {
             ForEach(Array(viewModel.images.enumerated()), id: \.element.uid) { index, image in
-                ZoomableComicImage(url: image.url) {
+                ZoomableComicImage(
+                    url: image.url,
+                    comicID: viewModel.comic.id,
+                    chapterID: viewModel.currentChapter?.id,
+                    expectedImageCount: viewModel.images.count,
+                    forceOffline: viewModel.offlineOnly
+                ) {
                     viewModel.toggleToolbar()
                 }
                 .tag(index)
@@ -286,6 +317,10 @@ struct HorizontalReader: View {
 
 struct ZoomableComicImage: View {
     let url: String
+    let comicID: String
+    let chapterID: String?
+    let expectedImageCount: Int
+    let forceOffline: Bool
     let onSingleTap: () -> Void
     
     @State private var scale: CGFloat = 1.0
@@ -295,7 +330,13 @@ struct ZoomableComicImage: View {
     
     var body: some View {
         GeometryReader { _ in
-            ComicAsyncImage(url: url)
+            ComicAsyncImage(
+                url: url,
+                offlineComicID: comicID,
+        offlineChapterID: chapterID,
+                expectedOfflineImageCount: expectedImageCount,
+                forceOffline: forceOffline
+            )
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .scaleEffect(scale)
@@ -359,7 +400,7 @@ struct ReaderTopToolbar: View {
     let onBack: () -> Void
     let onSettings: () -> Void
     
-    private var titleText: String {
+    private var chapterText: String {
         if !viewModel.currentChapterTitle.isEmpty {
             return viewModel.currentChapterTitle
         }
@@ -372,31 +413,21 @@ struct ReaderTopToolbar: View {
                 ReaderToolbarIconButton(systemImage: "chevron.left", action: onBack)
 
                 ReaderGlassPanel(horizontalPadding: 16, verticalPadding: 6) {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 2) {
                         Text(viewModel.comic.title)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.68))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
                             .lineLimit(1)
 
-                        HStack(spacing: 6) {
-                            Text(titleText)
-                                .font(.system(size: 15, weight: .bold))
-                                .lineLimit(1)
-                            if !viewModel.images.isEmpty {
-                                Text("•")
-                                    .foregroundStyle(.white.opacity(0.45))
-                                Text("\(viewModel.currentPageIndex + 1)/\(viewModel.images.count)")
-                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.white.opacity(0.72))
-                                    .monospacedDigit()
-                            }
-                        }
-                        .foregroundStyle(.white)
+                        Text(chapterText)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity)
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 50)
+                .frame(height: 46)
 
                 HStack(spacing: 10) {
                     Menu {
@@ -438,8 +469,8 @@ struct ReaderBottomToolbar: View {
             Spacer()
             
             if !viewModel.images.isEmpty {
-                ReaderGlassPanel(horizontalPadding: 18, verticalPadding: 18) {
-                    VStack(spacing: 16) {
+                ReaderGlassPanel(horizontalPadding: 18, verticalPadding: 14) {
+                    VStack(spacing: 12) {
                         HStack {
                             Text("\(viewModel.currentPageIndex + 1)")
                                 .font(.system(size: 13, weight: .bold))

@@ -212,6 +212,35 @@ struct ProfileView: View {
                 }
                 Divider().padding(.leading, 60)
             }
+
+            NavigationLink {
+                OfflineComicsView()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 32, height: 32)
+                        .background(Color.accentColor.opacity(0.1))
+                        .clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(localization.text("profile.offline"))
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Text(localization.text("profile.offline.subtitle"))
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            Divider().padding(.leading, 60)
             
             MenuTile(
                 icon: "gearshape.fill",
@@ -274,17 +303,81 @@ struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = SettingsViewModel()
     @ObservedObject private var localization = AppLocalization.shared
-    @ObservedObject private var proxyStore = AppProxyStore.shared
     
     var body: some View {
         NavigationStack {
             Form {
-                appearanceSection
-                rankSection
-                networkSection
-                cacheSection
-                sourceSection
-                aboutSection
+                Section {
+                    NavigationLink {
+                        AppearanceSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "paintbrush.fill",
+                            title: localization.text("settings.appearance"),
+                            subtitle: localization.text("settings.appearance.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        RankSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "chart.bar.xaxis",
+                            title: localization.text("settings.rank.title"),
+                            subtitle: localization.text("settings.rank.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        ReadingSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "book.pages.fill",
+                            title: localization.text("settings.reading"),
+                            subtitle: localization.text("settings.reading.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        NetworkSettingsView()
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "network",
+                            title: localization.text("settings.network"),
+                            subtitle: localization.text("settings.network.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        StorageSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "externaldrive.fill",
+                            title: localization.text("settings.cache"),
+                            subtitle: localization.text("settings.cache.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        SourceSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "chevron.left.forwardslash.chevron.right",
+                            title: localization.text("settings.source"),
+                            subtitle: localization.text("settings.source.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        AboutSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "info.circle.fill",
+                            title: localization.text("settings.about"),
+                            subtitle: localization.text("settings.about.subtitle")
+                        )
+                    }
+                }
             }
             .navigationTitle(localization.text("settings.title"))
             #if os(iOS)
@@ -294,258 +387,6 @@ struct SettingsSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(localization.text("common.done")) { dismiss() }
                 }
-            }
-        }
-    }
-
-    private var themeModeBinding: Binding<AppThemeMode> {
-        Binding(
-            get: { viewModel.themeMode },
-            set: { viewModel.setThemeMode($0) }
-        )
-    }
-
-    private var appearanceSection: some View {
-        Section(localization.text("settings.appearance")) {
-            Picker(localization.text("settings.theme"), selection: themeModeBinding) {
-                ForEach(AppThemeMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-
-            Picker(
-                localization.text("settings.language"),
-                selection: Binding(
-                    get: { viewModel.language },
-                    set: { viewModel.setLanguage($0) }
-                )
-            ) {
-                ForEach(AppLanguage.allCases) { language in
-                    Text(language.displayName).tag(language)
-                }
-            }
-
-            Picker(
-                localization.text("settings.imageQuality"),
-                selection: Binding(
-                    get: { viewModel.imageQuality },
-                    set: { viewModel.setImageQuality($0) }
-                )
-            ) {
-                ForEach(AppImageQuality.allCases) { quality in
-                    Text(quality.displayName).tag(quality)
-                }
-            }
-        }
-    }
-
-    private var networkSection: some View {
-        Section(localization.text("settings.network")) {
-            ForEach(proxyStore.rules) { rule in
-                HStack(spacing: 10) {
-                    Button {
-                        viewModel.selectProxyRule(rule)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: rule.isBuiltIn ? "lock.shield.fill" : "network")
-                                .foregroundStyle(rule.isBuiltIn ? .orange : Color.accentColor)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(rule.name)
-                                    .foregroundStyle(.primary)
-                                Text(rule.urlString)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            Spacer()
-                            if proxyStore.selectedRuleID == rule.id {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(Color.accentColor)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    if rule.isBuiltIn {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Button {
-                            viewModel.beginEditingProxy(rule)
-                        } label: {
-                            Image(systemName: "pencil")
-                        }
-                        .buttonStyle(.borderless)
-
-                        Button {
-                            viewModel.deleteProxyRule(rule)
-                        } label: {
-                            Image(systemName: "trash")
-                                .foregroundStyle(.red)
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                }
-            }
-
-            TextField(
-                localization.text("settings.proxy.name"),
-                text: $viewModel.proxyName
-            )
-
-            TextField(
-                localization.text("settings.proxy.url"),
-                text: $viewModel.proxyURL
-            )
-            #if os(iOS)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            #endif
-
-            HStack {
-                Button(
-                    viewModel.editingProxyID == nil
-                    ? localization.text("settings.proxy.add")
-                    : localization.text("settings.proxy.save")
-                ) {
-                    viewModel.saveProxyRule()
-                }
-                .disabled(viewModel.proxyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                if viewModel.editingProxyID != nil {
-                    Button(localization.text("common.cancel")) {
-                        viewModel.cancelEditingProxy()
-                    }
-                }
-            }
-
-            if let proxyMessage = viewModel.proxyMessage {
-                Text(proxyMessage)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.red)
-            }
-        }
-    }
-
-    private var rankSection: some View {
-        Section(localization.text("settings.rank.title")) {
-            Picker(
-                localization.text("settings.rank.display"),
-                selection: Binding(
-                    get: { viewModel.rankDisplay },
-                    set: { viewModel.setRankDisplay($0) }
-                )
-            ) {
-                ForEach(RankMetadataDisplay.allCases) { display in
-                    Text(localization.text(display.localizationKey)).tag(display)
-                }
-            }
-
-            Stepper(
-                value: Binding(
-                    get: { viewModel.rankMaxTagCount },
-                    set: { viewModel.setRankMaxTagCount($0) }
-                ),
-                in: 1...5,
-                step: 1
-            ) {
-                HStack {
-                    Text(localization.text("settings.rank.maxCount"))
-                    Spacer()
-                    Text("\(viewModel.rankMaxTagCount)")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-            }
-        }
-    }
-
-    private var cacheSection: some View {
-        Section(localization.text("settings.cache")) {
-            Button {
-                viewModel.clearCache()
-            } label: {
-                HStack {
-                    Text(
-                        viewModel.isClearingCache
-                        ? localization.text("settings.cache.clearing")
-                        : localization.text("settings.cache.clear")
-                    )
-                    Spacer()
-                    if viewModel.isClearingCache {
-                        ProgressView()
-                    }
-                }
-            }
-            .disabled(viewModel.isClearingCache)
-
-            if let cacheMessage = viewModel.cacheMessage {
-                Text(cacheMessage)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var sourceSection: some View {
-        Section(localization.text("settings.source")) {
-            HStack {
-                Text(localization.text("settings.deviceCode"))
-                Spacer()
-                Text(viewModel.bundleIdentifier)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
-            }
-
-            if let repositoryURL = viewModel.repositoryURL {
-                Link(destination: repositoryURL) {
-                    Label(localization.text("settings.repository"), systemImage: "chevron.left.forwardslash.chevron.right")
-                }
-            }
-
-            NavigationLink(localization.text("settings.license")) {
-                ScrollView {
-                    Text(SettingsViewModel.licenseText)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .navigationTitle(localization.text("settings.license"))
-                #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
-            }
-
-            NavigationLink(localization.text("settings.references")) {
-                ScrollView {
-                    Text(SettingsViewModel.thirdPartyNoticesText)
-                        .font(.system(.body, design: .default))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .navigationTitle(localization.text("settings.references"))
-                #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
-            }
-        }
-    }
-
-    private var aboutSection: some View {
-        Section(localization.text("settings.about")) {
-            HStack {
-                Text(localization.text("settings.version"))
-                Spacer()
-                Text(viewModel.appVersion)
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack {
-                Text(localization.text("settings.sdk"))
-                Spacer()
-                Text(viewModel.sdkDisplay)
-                    .foregroundStyle(.secondary)
             }
         }
     }

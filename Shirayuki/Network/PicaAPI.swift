@@ -175,7 +175,8 @@ nonisolated struct ComicSummary: Decodable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id = "_id"
-        case title, author, thumb, totalViews, totalLikes, likesCount
+        case title, author, thumb, totalViews, totalLikes, totalLikesSnake = "total_likes"
+        case likesCount, likesCountSnake = "likes_count", likes
         case pagesCount, epsCount, finished, categories, tags
     }
 
@@ -187,7 +188,12 @@ nonisolated struct ComicSummary: Decodable, Identifiable, Sendable {
         thumb = try container.decodeIfPresent(ImageDetail.self, forKey: .thumb) ?? .placeholder
         totalViews = try container.decodeLossyIntIfPresent(forKey: .totalViews) ?? 0
         totalLikes = try container.decodeLossyIntIfPresent(forKey: .totalLikes)
-        likesCount = try container.decodeLossyIntIfPresent(forKey: .likesCount) ?? 0
+            ?? container.decodeLossyIntIfPresent(forKey: .totalLikesSnake)
+        likesCount = try container.decodeLossyIntIfPresent(forKey: .likesCount)
+            ?? container.decodeLossyIntIfPresent(forKey: .likesCountSnake)
+            ?? container.decodeLossyIntIfPresent(forKey: .likes)
+            ?? totalLikes
+            ?? 0
         pagesCount = try container.decodeLossyIntIfPresent(forKey: .pagesCount) ?? 0
         epsCount = try container.decodeLossyIntIfPresent(forKey: .epsCount) ?? 0
         finished = try container.decodeIfPresent(Bool.self, forKey: .finished) ?? false
@@ -320,7 +326,9 @@ nonisolated struct ComicDetail: Decodable, Identifiable, Sendable {
         case title, description, thumb, author, categories
         case chineseTeam, tags, pagesCount, epsCount, finished
         case updatedAt = "updated_at"
+        case updatedAtCamel = "updatedAt"
         case createdAt = "created_at"
+        case createdAtCamel = "createdAt"
         case allowDownload, allowComment
         case totalLikes, totalViews, totalComments
         case viewsCount, likesCount, commentsCount
@@ -341,8 +349,12 @@ nonisolated struct ComicDetail: Decodable, Identifiable, Sendable {
         pagesCount = try container.decodeLossyIntIfPresent(forKey: .pagesCount) ?? 0
         epsCount = try container.decodeLossyIntIfPresent(forKey: .epsCount) ?? 0
         finished = try container.decodeIfPresent(Bool.self, forKey: .finished) ?? false
-        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
-        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt) ?? ""
+        updatedAt = try container.decodeLossyStringIfPresent(forKey: .updatedAt)
+            ?? container.decodeLossyStringIfPresent(forKey: .updatedAtCamel)
+            ?? ""
+        createdAt = try container.decodeLossyStringIfPresent(forKey: .createdAt)
+            ?? container.decodeLossyStringIfPresent(forKey: .createdAtCamel)
+            ?? ""
         allowDownload = try container.decodeIfPresent(Bool.self, forKey: .allowDownload) ?? false
         allowComment = try container.decodeIfPresent(Bool.self, forKey: .allowComment) ?? false
         totalLikes = try container.decodeLossyIntIfPresent(forKey: .totalLikes) ?? 0
@@ -350,7 +362,9 @@ nonisolated struct ComicDetail: Decodable, Identifiable, Sendable {
         totalComments = try container.decodeLossyIntIfPresent(forKey: .totalComments)
         viewsCount = try container.decodeLossyIntIfPresent(forKey: .viewsCount) ?? 0
         likesCount = try container.decodeLossyIntIfPresent(forKey: .likesCount) ?? 0
-        commentsCount = try container.decodeLossyIntIfPresent(forKey: .commentsCount) ?? 0
+        commentsCount = try container.decodeLossyIntIfPresent(forKey: .commentsCount)
+            ?? totalComments
+            ?? 0
         isFavourite = try container.decodeIfPresent(Bool.self, forKey: .isFavourite) ?? false
         isLiked = try container.decodeIfPresent(Bool.self, forKey: .isLiked) ?? false
     }
@@ -360,6 +374,35 @@ nonisolated struct ComicDetailsResponse: Decodable, Sendable {
     let comic: ComicDetail
 }
 
+extension ComicDetail {
+    init(offlineRecord record: OfflineComicRecord) {
+        id = record.id
+        creator = .placeholder
+        title = record.title
+        description = ""
+        thumb = .placeholder
+        author = nil
+        categories = []
+        chineseTeam = ""
+        tags = []
+        pagesCount = record.imageCount
+        epsCount = record.chapters.count
+        finished = false
+        updatedAt = record.updatedAt
+        createdAt = record.createdAt
+        allowDownload = true
+        allowComment = false
+        totalLikes = 0
+        totalViews = 0
+        totalComments = 0
+        viewsCount = 0
+        likesCount = 0
+        commentsCount = 0
+        isFavourite = false
+        isLiked = false
+    }
+}
+
 // MARK: - Chapter
 nonisolated struct PicaChapter: Decodable, Identifiable, Sendable {
     let uid: String
@@ -367,6 +410,14 @@ nonisolated struct PicaChapter: Decodable, Identifiable, Sendable {
     let order: Int
     let updatedAt: String
     let id: String
+
+    init(uid: String, title: String, order: Int, updatedAt: String = "", id: String) {
+        self.uid = uid
+        self.title = title
+        self.order = order
+        self.updatedAt = updatedAt
+        self.id = id
+    }
     
     enum CodingKeys: String, CodingKey {
         case uid = "_id"
@@ -407,8 +458,16 @@ nonisolated struct ChapterImage: Decodable, Identifiable, Sendable {
     let uid: String
     let id: String?
     let media: ImageDetail
+    private var offlineURL: String? = nil
+
+    init(uid: String, id: String?, offlineURL: String) {
+        self.uid = uid
+        self.id = id
+        self.media = .placeholder
+        self.offlineURL = offlineURL
+    }
     
-    var url: String { media.url }
+    var url: String { offlineURL ?? media.url }
     
     enum CodingKeys: String, CodingKey {
         case uid = "_id"
@@ -604,6 +663,19 @@ nonisolated struct ExtraRecommendComic: Decodable, Sendable {
 }
 
 private extension KeyedDecodingContainer {
+    nonisolated func decodeLossyStringIfPresent(forKey key: Key) throws -> String? {
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            return value
+        }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return String(value)
+        }
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return String(value)
+        }
+        return nil
+    }
+
     nonisolated func decodeLossyIntIfPresent(forKey key: Key) throws -> Int? {
         // 用 try? 容错：当 JSON 值是字符串（如 "42"）时，decodeIfPresent(Int.self)
         // 会抛出 typeMismatch，原先的 String 分支永远不可达。这里把抛出也视作

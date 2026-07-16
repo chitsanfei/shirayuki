@@ -26,12 +26,30 @@ struct ComicCoverImage: View {
 
 struct ComicAsyncImage: View {
     let url: String?
+    let offlineComicID: String?
+    let offlineChapterID: String?
+    let expectedOfflineImageCount: Int?
+    let forceOffline: Bool
     @State private var imageData: Data?
     @State private var isLoading = false
     @State private var didFail = false
 
     private var requestID: String {
-        "\(url ?? "empty")|\(AppImageQuality.stored.rawValue)"
+        "\(url ?? "empty")|\(AppImageQuality.stored.rawValue)|\(offlineComicID ?? "")|\(offlineChapterID ?? "")|\(expectedOfflineImageCount ?? 0)"
+    }
+
+    init(
+        url: String?,
+        offlineComicID: String? = nil,
+        offlineChapterID: String? = nil,
+        expectedOfflineImageCount: Int? = nil,
+        forceOffline: Bool = false
+    ) {
+        self.url = url
+        self.offlineComicID = offlineComicID
+        self.offlineChapterID = offlineChapterID
+        self.expectedOfflineImageCount = expectedOfflineImageCount
+        self.forceOffline = forceOffline
     }
     
     var body: some View {
@@ -67,7 +85,21 @@ struct ComicAsyncImage: View {
             }
             isLoading = true
             do {
-                imageData = try await ImageLoader.shared.loadImage(from: url)
+                let quality = AppImageQuality.stored
+                if (forceOffline || !AppReaderSettingsStore.shared.ignoresOfflineContent),
+                   let comicID = offlineComicID,
+                   let chapterID = offlineChapterID,
+                   let localData = await OfflineComicStore.shared.imageData(
+                       comicID: comicID,
+                       chapterID: chapterID,
+                       url: url,
+                       quality: quality,
+                       expectedImageCount: expectedOfflineImageCount
+                   ) {
+                    imageData = localData
+                } else {
+                    imageData = try await ImageLoader.shared.loadImage(from: url, quality: quality)
+                }
             } catch {
                 imageData = nil
                 didFail = true

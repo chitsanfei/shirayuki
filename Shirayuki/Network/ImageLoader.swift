@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 actor ImageLoader {
     static let shared = ImageLoader()
@@ -9,6 +10,7 @@ actor ImageLoader {
     private var currentCacheSize = 0
     private var cacheOrder: [String] = []
     private let session: URLSession
+    private let diskCacheDirectory: URL
     
     private init() {
         let configuration = URLSessionConfiguration.default
@@ -17,16 +19,28 @@ actor ImageLoader {
         configuration.timeoutIntervalForResource = 90
         configuration.httpMaximumConnectionsPerHost = 6
         session = URLSession(configuration: configuration)
+        let cachesDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        diskCacheDirectory = cachesDirectory.appendingPathComponent("ShirayukiImageCache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
     }
     
     func loadImage(from urlString: String) async throws -> Data? {
+        try await loadImage(from: urlString, quality: AppImageQuality.stored)
+    }
+
+    func loadImage(from urlString: String, quality: AppImageQuality) async throws -> Data? {
         guard let url = URL(string: urlString) else { return nil }
-        let quality = AppImageQuality.stored
         let cacheKey = "\(quality.rawValue)|\(urlString)"
         
         if let cached = memoryCache[cacheKey] {
             touchCache(for: cacheKey)
             return cached
+        }
+
+        if let diskData = try? Data(contentsOf: diskURL(for: cacheKey)) {
+            setCache(key: cacheKey, data: diskData)
+            return diskData
         }
         
         let task: Task<Data, Error>
@@ -56,6 +70,7 @@ actor ImageLoader {
             ongoingTasks.removeValue(forKey: cacheKey)
             if memoryCache[cacheKey] == nil {
                 setCache(key: cacheKey, data: data)
+                try? data.write(to: diskURL(for: cacheKey), options: .atomic)
             } else {
                 touchCache(for: cacheKey)
             }
@@ -99,5 +114,36 @@ actor ImageLoader {
         memoryCache.removeAll()
         cacheOrder.removeAll()
         currentCacheSize = 0
+        try? FileManager.default.removeItem(at: diskCacheDirectory)
+        try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
+    }
+
+    func cacheSize() -> Int {
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: diskCacheDirectory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return 0
+        }
+        return files.reduce(0) { total, url in
+            total + ((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+    }
+
+    func removeCachedImage(from urlString: String, quality: AppImageQuality) {
+        let cacheKey = "\(quality.rawValue)|\(urlString)"
+        if let data = memoryCache.removeValue(forKey: cacheKey) {
+            currentCacheSize -= data.count
+        }
+        cacheOrder.removeAll { $0 == cacheKey }
+        try? FileManager.default.removeItem(at: diskURL(for: cacheKey))
+    }
+
+    private func diskURL(for cacheKey: String) -> URL {
+        let digest = SHA256.hash(data: Data(cacheKey.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return diskCacheDirectory.appendingPathComponent(digest).appendingPathExtension("data")
     }
 }
