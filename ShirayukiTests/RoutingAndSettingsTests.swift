@@ -1,6 +1,7 @@
 import XCTest
 @testable import Shirayuki
 
+/// Verifies source routing metadata and settings reference text.
 final class RoutingAndSettingsTests: XCTestCase {
     func testCategorySourceDerivesIdentifiersAndMessages() {
         let source = ComicsBrowserSource.category("恋爱")
@@ -11,20 +12,15 @@ final class RoutingAndSettingsTests: XCTestCase {
         XCTAssertEqual(source.emptySubtitle, "恋爱 分类里还没有可显示的内容")
     }
 
-    func testAPIEndpointsExposeReadableDescriptions() {
-        XCTAssertEqual(APIEndpoint.picacomic.displayName, "Picacomic 官方")
-        XCTAssertFalse(APIEndpoint.picacomic.description.isEmpty)
-        XCTAssertEqual(APIEndpoint.go2778.displayName, "Go2778 代理")
-        XCTAssertFalse(APIEndpoint.go2778.description.isEmpty)
+    func testOfficialRouteUsesReadableName() {
+        XCTAssertEqual(AppProxyRule.official.displayName, "Picacomic 官方")
     }
 
-    @MainActor
     func testThirdPartyNoticesDescribeDesignReferences() {
-        let previousLanguage = AppLocalization.shared.language
-        AppLocalization.shared.setLanguage(.simplifiedChinese)
-        defer { AppLocalization.shared.setLanguage(previousLanguage) }
-
-        let text = SettingsViewModel().thirdPartyNoticesText
+        // Access the static property directly to avoid instantiating the
+        // @MainActor-isolated SettingsViewModel, which triggers a Swift
+        // runtime crash in its deinit under XCTest's task-local scope.
+        let text = SettingsViewModel.thirdPartyNoticesText
 
         XCTAssertTrue(text.contains("haka_comic"))
         XCTAssertTrue(text.contains("design guidance only"))

@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Displays the complete set of browsable comic categories.
 struct CategoriesView: View {
     @StateObject private var viewModel = CategoriesViewModel()
     @ObservedObject private var localization = AppLocalization.shared
@@ -82,6 +83,7 @@ struct CategoriesView: View {
     }
 }
 
+/// Reusable visual cell for one PicACG category.
 struct CategoryGridItem: View {
     let category: PicaCategory
     

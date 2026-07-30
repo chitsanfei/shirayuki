@@ -1,9 +1,10 @@
 import Foundation
 import Combine
 
+/// Loads home discovery, ranking, and category content.
 @MainActor
-final class HomeViewModel: ObservableObject {
-    @Published var comics: [ComicDoc] = []
+final class HomeViewModel: ObservableViewModel {
+    @Published var comics: [ComicSummary] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var currentPage = 1
@@ -15,22 +16,11 @@ final class HomeViewModel: ObservableObject {
     }
 
     func loadHome() async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-
-        do {
-            let result = try await PicaAPIService.shared.fetchComics(payload: makePayload(page: 1))
-            comics = result.docs
-            currentPage = result.page
-            totalPages = result.pages
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        await loadComics(reset: true)
     }
 
     func refresh() async {
-        await selectMode(selectedMode)
+        await loadComics(reset: true)
     }
 
     func loadComics(reset: Bool = false) async {
@@ -63,7 +53,7 @@ final class HomeViewModel: ObservableObject {
             currentPage = result.page
             totalPages = result.pages
         } catch {
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
     }
 
@@ -93,6 +83,7 @@ final class HomeViewModel: ObservableObject {
     }
 }
 
+/// Discovery feed selected on the home screen.
 enum HomeDisplayMode: String, CaseIterable, Identifiable {
     case latest
     case daily

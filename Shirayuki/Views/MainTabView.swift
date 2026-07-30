@@ -1,19 +1,25 @@
 import SwiftUI
 
+/// Switches between authentication, restoration, and the primary tab hierarchy.
 struct MainTabView: View {
-    @StateObject private var appState = AppState.shared
+    @EnvironmentObject private var appState: AppState
     @State private var selectedTab: AppTab = .home
     
     var body: some View {
-        Group {
+        ZStack {
             if appState.isRestoringSession {
                 RestoringSessionView()
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
             } else if appState.isLoggedIn {
                 authenticatedTabs
+                    .transition(.sessionScreen)
             } else {
                 LoginView()
+                    .transition(.sessionScreen)
             }
         }
+        .animation(.sessionSpring, value: appState.isRestoringSession)
+        .animation(.sessionSpring, value: appState.isLoggedIn)
         .ignoresSafeArea(.keyboard)
     }
 
@@ -41,6 +47,24 @@ struct MainTabView: View {
                 .tag(AppTab.profile)
         }
     }
+}
+
+private extension AnyTransition {
+    static let sessionScreen = AnyTransition.asymmetric(
+        insertion: .scale(scale: 0.92, anchor: .center)
+            .combined(with: .move(edge: .trailing)),
+        removal: .scale(scale: 1.06, anchor: .center)
+            .combined(with: .move(edge: .leading))
+    )
+}
+
+private extension Animation {
+    static let sessionSpring = Animation.interpolatingSpring(
+        mass: 1,
+        stiffness: 170,
+        damping: 21,
+        initialVelocity: 0.32
+    )
 }
 
 private struct RestoringSessionView: View {

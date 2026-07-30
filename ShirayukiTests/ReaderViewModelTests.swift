@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import Shirayuki
 
+/// Verifies reader navigation, persistence, and chapter download state.
 @MainActor
 final class ReaderViewModelTests: XCTestCase {
     func testResolvedInitialChapterIndexPrefersChapterIdentityBeforeFallbackIndex() throws {
@@ -71,6 +72,65 @@ final class ReaderViewModelTests: XCTestCase {
         XCTAssertEqual(progress?.chapterOrder, chapter.order)
         XCTAssertEqual(progress?.pageIndex, 4)
     }
+
+    func testApplyUserScrollPageUpdatesIndexWithoutScrollTarget() throws {
+        let comic = try makeComic(id: "scroll-comic")
+        let chapter = try makeChapter(uid: "uid-s", id: "chapter-s", title: "第1话", order: 1)
+        let images = try (1...5).map { try makeImage(uid: "p\($0)", path: "/c/\($0).jpg") }
+
+        let viewModel = ReaderViewModel(comic: comic, initialChapters: [chapter])
+        viewModel.chapters = [chapter]
+        viewModel.images = images
+        viewModel.currentPageIndex = 0
+
+        viewModel.applyUserScrollPage(3)
+        XCTAssertEqual(viewModel.currentPageIndex, 3)
+        // User scrolling must not schedule another programmatic scroll.
+        XCTAssertNil(viewModel.scrollTargetPage)
+    }
+
+    func testConsumeScrollTargetPageClearsPendingTarget() throws {
+        let comic = try makeComic(id: "consume-comic")
+        let chapter = try makeChapter(uid: "uid-c", id: "chapter-c", title: "第1话", order: 1)
+        let images = try (1...3).map { try makeImage(uid: "p\($0)", path: "/c/\($0).jpg") }
+
+        let viewModel = ReaderViewModel(comic: comic, initialChapters: [chapter])
+        viewModel.chapters = [chapter]
+        viewModel.images = images
+        viewModel.scrollTargetPage = 2
+
+        viewModel.consumeScrollTargetPage()
+        XCTAssertNil(viewModel.scrollTargetPage)
+    }
+    func testChapterDownloadStatePrioritizesActiveProgress() {
+        let progress = OfflineDownloadProgress(completedImages: 2, totalImages: 5)
+
+        XCTAssertEqual(
+            ReaderViewModel.chapterDownloadState(
+                chapterID: "chapter-1",
+                offlineChapterIDs: ["chapter-1"],
+                progress: progress
+            ),
+            .downloading(progress)
+        )
+        XCTAssertEqual(
+            ReaderViewModel.chapterDownloadState(
+                chapterID: "chapter-1",
+                offlineChapterIDs: ["chapter-1"],
+                progress: nil
+            ),
+            .downloaded
+        )
+        XCTAssertEqual(
+            ReaderViewModel.chapterDownloadState(
+                chapterID: "chapter-2",
+                offlineChapterIDs: ["chapter-1"],
+                progress: nil
+            ),
+            .notDownloaded
+        )
+    }
+
 }
 
 private func makeComic(id: String) throws -> ComicDetail {

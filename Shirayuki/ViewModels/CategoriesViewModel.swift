@@ -1,8 +1,9 @@
 import Foundation
 import Combine
 
+/// Loads and publishes categories available for comic browsing.
 @MainActor
-final class CategoriesViewModel: ObservableObject {
+final class CategoriesViewModel: ObservableViewModel {
     @Published var categories: [PicaCategory] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -15,7 +16,7 @@ final class CategoriesViewModel: ObservableObject {
         do {
             categories = try await PicaAPIService.shared.fetchCategories()
         } catch {
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
     }
 }

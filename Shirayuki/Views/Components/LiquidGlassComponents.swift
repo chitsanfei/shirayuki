@@ -7,6 +7,7 @@ import AppKit
 #endif
 
 // MARK: - Comic Cover Image
+/// Displays a comic cover using the shared async image pipeline.
 struct ComicCoverImage: View {
     let url: String?
     var contentMode: ContentMode = .fill
@@ -24,10 +25,34 @@ struct ComicCoverImage: View {
     }
 }
 
+/// Resolves online and offline image sources with loading placeholders.
 struct ComicAsyncImage: View {
     let url: String?
+    let offlineComicID: String?
+    let offlineChapterID: String?
+    let expectedOfflineImageCount: Int?
+    let forceOffline: Bool
     @State private var imageData: Data?
     @State private var isLoading = false
+    @State private var didFail = false
+
+    private var requestID: String {
+        "\(url ?? "empty")|\(AppImageQuality.stored.rawValue)|\(offlineComicID ?? "")|\(offlineChapterID ?? "")|\(expectedOfflineImageCount ?? 0)"
+    }
+
+    init(
+        url: String?,
+        offlineComicID: String? = nil,
+        offlineChapterID: String? = nil,
+        expectedOfflineImageCount: Int? = nil,
+        forceOffline: Bool = false
+    ) {
+        self.url = url
+        self.offlineComicID = offlineComicID
+        self.offlineChapterID = offlineChapterID
+        self.expectedOfflineImageCount = expectedOfflineImageCount
+        self.forceOffline = forceOffline
+    }
     
     var body: some View {
         Group {
@@ -53,29 +78,57 @@ struct ComicAsyncImage: View {
                 placeholder
             }
         }
-        .task(id: url) {
+        .task(id: requestID) {
             imageData = nil
+            didFail = false
             guard let url = url else {
                 isLoading = false
                 return
             }
             isLoading = true
             do {
-                imageData = try await ImageLoader.shared.loadImage(from: url)
+                let quality = AppImageQuality.stored
+                if (forceOffline || !AppReaderSettingsStore.shared.ignoresOfflineContent),
+                   let comicID = offlineComicID,
+                   let chapterID = offlineChapterID,
+                   let localData = await OfflineComicStore.shared.imageData(
+                       comicID: comicID,
+                       chapterID: chapterID,
+                       url: url,
+                       quality: quality,
+                       expectedImageCount: expectedOfflineImageCount
+                   ) {
+                    imageData = localData
+                } else {
+                    imageData = try await ImageLoader.shared.loadImage(from: url, quality: quality)
+                }
             } catch {
                 imageData = nil
+                didFail = true
             }
             isLoading = false
         }
-        .animation(.easeOut(duration: 0.24), value: imageData != nil)
+        .overlay {
+            if isLoading {
+                ProgressView()
+                    .tint(.white)
+                    .padding(10)
+                    .background(.black.opacity(0.22), in: Circle())
+                    .transition(.scale(scale: 0.72).combined(with: .opacity))
+            } else if didFail && imageData == nil {
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.secondary.opacity(0.7))
+            }
+        }
+        .animation(.interpolatingSpring(stiffness: 240, damping: 22), value: imageData != nil)
+        .animation(.easeOut(duration: 0.18), value: isLoading)
     }
     
     private var placeholder: some View {
         ZStack {
             Color.gray.opacity(0.12)
-            if isLoading {
-                ProgressView()
-            } else {
+            if !isLoading && !didFail {
                 Image(systemName: "photo")
                     .font(.system(size: 28))
                     .foregroundStyle(.secondary.opacity(0.5))
@@ -98,6 +151,7 @@ private struct ComicImageScaling: ViewModifier {
 }
 
 // MARK: - Glass Toolbar Background
+/// Material background shared by floating reader toolbars.
 struct GlassToolbarBackground: View {
     @Environment(\.colorScheme) private var colorScheme
     
@@ -118,6 +172,7 @@ struct GlassToolbarBackground: View {
 }
 
 // MARK: - Page Number Tag
+/// Compact overlay displaying the current reader page.
 struct PageNumberTag: View {
     let text: String
     
@@ -140,6 +195,7 @@ struct PageNumberTag: View {
 }
 
 // MARK: - Settings Block
+/// Grouped settings container with an optional title.
 struct SettingsBlock<Content: View>: View {
     let title: String?
     let content: Content
@@ -174,6 +230,7 @@ struct SettingsBlock<Content: View>: View {
 }
 
 // MARK: - Menu Tile
+/// Icon, title, and subtitle row used by settings menus.
 struct MenuTile: View {
     let icon: String
     let title: String

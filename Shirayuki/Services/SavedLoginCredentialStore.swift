@@ -1,5 +1,6 @@
 import Foundation
 
+/// Stores optional remembered login credentials in Keychain.
 enum SavedLoginCredentialStore {
     struct Credentials: Equatable {
         let username: String
@@ -30,11 +31,13 @@ enum SavedLoginCredentialStore {
         rememberedCredentials != nil
     }
 
+    /// Returns the remembered password only when remembering is enabled.
     static func savedPassword() -> String {
         guard shouldRememberPassword else { return "" }
         return KeychainTokenStore.readValue(account: passwordAccount) ?? ""
     }
 
+    /// Persists the username and conditionally stores the password in Keychain.
     static func save(username: String, password: String, rememberPassword: Bool) {
         UserDefaults.standard.set(username, forKey: usernameKey)
         UserDefaults.standard.set(rememberPassword, forKey: rememberPasswordKey)
@@ -45,6 +48,7 @@ enum SavedLoginCredentialStore {
         }
     }
 
+    /// Disables password remembering and removes the stored secret.
     static func clearSavedPassword() {
         UserDefaults.standard.set(false, forKey: rememberPasswordKey)
         KeychainTokenStore.deleteValue(account: passwordAccount)

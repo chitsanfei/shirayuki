@@ -1,7 +1,8 @@
 import SwiftUI
 
+/// Standard comic card used by discovery grids.
 struct ComicCard: View {
-    let comic: ComicDoc
+    let comic: ComicSummary
     @ObservedObject private var localization = AppLocalization.shared
 
     private enum Layout {
@@ -56,8 +57,11 @@ struct ComicCard: View {
     }
 }
 
+/// Ranking card with configurable category or tag metadata.
 struct RankComicCard: View {
-    let comic: ComicDoc
+    let comic: ComicSummary
+    let metadataDisplay: RankMetadataDisplay
+    let maxTagCount: Int
     @ObservedObject private var localization = AppLocalization.shared
 
     private enum Layout {
@@ -96,7 +100,7 @@ struct RankComicCard: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
 
-            tagRow
+            metadataRow
 
             HStack(spacing: 8) {
                 Label("\(comic.likesCount)", systemImage: "heart.fill")
@@ -113,10 +117,11 @@ struct RankComicCard: View {
         .frame(height: Layout.cardHeight, alignment: .topLeading)
     }
 
-    private var tagRow: some View {
+    private var metadataRow: some View {
         HStack(spacing: 4) {
-            ForEach(Array(comic.tags.prefix(5).enumerated()), id: \.offset) { _, tag in
-                Text(tag)
+            let values = metadataDisplay == .tags ? comic.tags : comic.categories
+            ForEach(Array(values.prefix(maxTagCount).enumerated()), id: \.offset) { _, value in
+                Text(value)
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -136,8 +141,9 @@ struct RankComicCard: View {
     }
 }
 
+/// Search-result card with query-relevant comic metadata.
 struct SearchComicCard: View {
-    let comic: SearchComic
+    let comic: ComicSummary
     @ObservedObject private var localization = AppLocalization.shared
 
     private enum Layout {

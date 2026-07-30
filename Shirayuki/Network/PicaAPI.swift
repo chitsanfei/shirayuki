@@ -4,6 +4,7 @@ import Foundation
 // nonisolated and sendable even though the app target defaults to MainActor.
 
 // MARK: - Base Response
+/// Generic envelope returned by PicACG endpoints.
 nonisolated struct BaseResponse<T: Decodable & Sendable>: Decodable, Sendable {
     let code: Int
     let message: String
@@ -11,16 +12,49 @@ nonisolated struct BaseResponse<T: Decodable & Sendable>: Decodable, Sendable {
 }
 
 // MARK: - Login
+/// Credentials encoded for the sign-in endpoint.
 nonisolated struct LoginPayload: Encodable, Sendable {
     let email: String
     let password: String
 }
 
+/// Account fields encoded for registration.
+nonisolated struct RegisterPayload: Encodable, Sendable {
+    let email: String
+    let password: String
+    let name: String
+    let birthday: String
+    let gender: String
+}
+
+/// Current and replacement passwords encoded for an update request.
+nonisolated struct PasswordUpdatePayload: Encodable, Sendable {
+    let oldPassword: String
+    let newPassword: String
+
+    enum CodingKeys: String, CodingKey {
+        case oldPassword = "old_password"
+        case newPassword = "new_password"
+    }
+}
+
+/// Base64 avatar payload sent to the profile endpoint.
+nonisolated struct AvatarUpdatePayload: Encodable, Sendable {
+    let avatar: String
+}
+
+/// Editable profile fields sent to the user endpoint.
+nonisolated struct ProfileUpdatePayload: Encodable, Sendable {
+    let slogan: String
+}
+
+/// Authentication response containing the bearer token.
 nonisolated struct LoginResponse: Decodable, Sendable {
     let token: String
 }
 
 // MARK: - Image Detail
+/// File-server metadata used to construct a concrete image URL.
 nonisolated struct ImageDetail: Decodable, Sendable {
     let fileServer: String
     let path: String
@@ -56,6 +90,7 @@ nonisolated struct ImageDetail: Decodable, Sendable {
 }
 
 // MARK: - Category
+/// Category metadata displayed by category browsing screens.
 nonisolated struct PicaCategory: Decodable, Identifiable, Sendable {
     let rawId: String?
     let thumb: ImageDetail
@@ -84,16 +119,18 @@ nonisolated struct PicaCategory: Decodable, Identifiable, Sendable {
     }
 }
 
+/// Category-list payload contained by the base response envelope.
 nonisolated struct CategoriesResponse: Decodable, Sendable {
     let categories: [PicaCategory]
 }
 
 // MARK: - Comic Sort Type
+/// Sort codes accepted by PicACG comic and search endpoints.
 nonisolated enum ComicSortType: String, CaseIterable, Encodable, Identifiable, Sendable {
-    case dd = "dd" // 新到旧
-    case da = "da" // 旧到新
-    case ld = "ld" // 最多喜欢
-    case vd = "vd" // 最多观看
+    case dd = "dd" // Newest first
+    case da = "da" // Oldest first
+    case ld = "ld" // Most liked
+    case vd = "vd" // Most viewed
     
     var id: String { rawValue }
     
@@ -108,6 +145,7 @@ nonisolated enum ComicSortType: String, CaseIterable, Encodable, Identifiable, S
 }
 
 // MARK: - Comics Payload
+/// Optional query fields used by comic-list endpoints.
 nonisolated struct ComicsPayload: Sendable {
     let page: Int?
     let c: String?
@@ -130,55 +168,63 @@ nonisolated struct ComicsPayload: Sendable {
     }
 }
 
-// MARK: - Doc (Comic List Item)
-nonisolated struct ComicDoc: Decodable, Identifiable, Sendable {
-    let uid: String
+// MARK: - Comic Summary (unified comic list item)
+// Replaces the former ComicDoc, RecommendComic, and SearchComic list DTOs.
+// Lossy decoding keeps partial API payloads from invalidating an entire list.
+/// Stable, lossily decoded comic representation shared by all list screens.
+nonisolated struct ComicSummary: Decodable, Identifiable, Sendable {
+    let id: String
     let title: String
     let author: String
+    let thumb: ImageDetail
     let totalViews: Int
     let totalLikes: Int?
+    let likesCount: Int
     let pagesCount: Int
     let epsCount: Int
     let finished: Bool
     let categories: [String]
-    let thumb: ImageDetail
-    let likesCount: Int
     let tags: [String]
-    
-    var id: String { uid }
-    
+
     enum CodingKeys: String, CodingKey {
-        case uid = "_id"
-        case title, author, totalViews, totalLikes, pagesCount, epsCount
-        case finished, categories, thumb, likesCount, tags
+        case id = "_id"
+        case title, author, thumb, totalViews, totalLikes, totalLikesSnake = "total_likes"
+        case likesCount, likesCountSnake = "likes_count", likes
+        case pagesCount, epsCount, finished, categories, tags
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        uid = try container.decode(String.self, forKey: .uid)
-        title = try container.decode(String.self, forKey: .title)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
         author = try container.decodeIfPresent(String.self, forKey: .author) ?? ""
+        thumb = try container.decodeIfPresent(ImageDetail.self, forKey: .thumb) ?? .placeholder
         totalViews = try container.decodeLossyIntIfPresent(forKey: .totalViews) ?? 0
         totalLikes = try container.decodeLossyIntIfPresent(forKey: .totalLikes)
-        pagesCount = try container.decode(Int.self, forKey: .pagesCount)
-        epsCount = try container.decode(Int.self, forKey: .epsCount)
-        finished = try container.decode(Bool.self, forKey: .finished)
+            ?? container.decodeLossyIntIfPresent(forKey: .totalLikesSnake)
+        likesCount = try container.decodeLossyIntIfPresent(forKey: .likesCount)
+            ?? container.decodeLossyIntIfPresent(forKey: .likesCountSnake)
+            ?? container.decodeLossyIntIfPresent(forKey: .likes)
+            ?? totalLikes
+            ?? 0
+        pagesCount = try container.decodeLossyIntIfPresent(forKey: .pagesCount) ?? 0
+        epsCount = try container.decodeLossyIntIfPresent(forKey: .epsCount) ?? 0
+        finished = try container.decodeIfPresent(Bool.self, forKey: .finished) ?? false
         categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
-        thumb = try container.decodeIfPresent(ImageDetail.self, forKey: .thumb) ?? .placeholder
-        likesCount = try container.decodeLossyIntIfPresent(forKey: .likesCount) ?? 0
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
     }
 }
 
 // MARK: - Comics List
+/// Paginated comic collection returned by browse and search operations.
 nonisolated struct ComicsList: Decodable, Sendable {
-    let docs: [ComicDoc]
+    let docs: [ComicSummary]
     let limit: Int
     let page: Int
     let pages: Int
     let total: Int
 
-    init(docs: [ComicDoc], limit: Int, page: Int, pages: Int, total: Int) {
+    init(docs: [ComicSummary], limit: Int, page: Int, pages: Int, total: Int) {
         self.docs = docs
         self.limit = limit
         self.page = page
@@ -187,11 +233,13 @@ nonisolated struct ComicsList: Decodable, Sendable {
     }
 }
 
+/// Response payload wrapping a comic collection.
 nonisolated struct ComicsResponse: Decodable, Sendable {
     let comics: ComicsList
 }
 
 // MARK: - Creator
+/// Public creator profile embedded in comic details.
 nonisolated struct Creator: Decodable, Sendable {
     let id: String
     let gender: String
@@ -262,6 +310,7 @@ nonisolated struct Creator: Decodable, Sendable {
 }
 
 // MARK: - Comic Detail
+/// Complete comic metadata used by detail and reader screens.
 nonisolated struct ComicDetail: Decodable, Identifiable, Sendable {
     let id: String
     let creator: Creator
@@ -294,7 +343,9 @@ nonisolated struct ComicDetail: Decodable, Identifiable, Sendable {
         case title, description, thumb, author, categories
         case chineseTeam, tags, pagesCount, epsCount, finished
         case updatedAt = "updated_at"
+        case updatedAtCamel = "updatedAt"
         case createdAt = "created_at"
+        case createdAtCamel = "createdAt"
         case allowDownload, allowComment
         case totalLikes, totalViews, totalComments
         case viewsCount, likesCount, commentsCount
@@ -315,8 +366,12 @@ nonisolated struct ComicDetail: Decodable, Identifiable, Sendable {
         pagesCount = try container.decodeLossyIntIfPresent(forKey: .pagesCount) ?? 0
         epsCount = try container.decodeLossyIntIfPresent(forKey: .epsCount) ?? 0
         finished = try container.decodeIfPresent(Bool.self, forKey: .finished) ?? false
-        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
-        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt) ?? ""
+        updatedAt = try container.decodeLossyStringIfPresent(forKey: .updatedAt)
+            ?? container.decodeLossyStringIfPresent(forKey: .updatedAtCamel)
+            ?? ""
+        createdAt = try container.decodeLossyStringIfPresent(forKey: .createdAt)
+            ?? container.decodeLossyStringIfPresent(forKey: .createdAtCamel)
+            ?? ""
         allowDownload = try container.decodeIfPresent(Bool.self, forKey: .allowDownload) ?? false
         allowComment = try container.decodeIfPresent(Bool.self, forKey: .allowComment) ?? false
         totalLikes = try container.decodeLossyIntIfPresent(forKey: .totalLikes) ?? 0
@@ -324,23 +379,64 @@ nonisolated struct ComicDetail: Decodable, Identifiable, Sendable {
         totalComments = try container.decodeLossyIntIfPresent(forKey: .totalComments)
         viewsCount = try container.decodeLossyIntIfPresent(forKey: .viewsCount) ?? 0
         likesCount = try container.decodeLossyIntIfPresent(forKey: .likesCount) ?? 0
-        commentsCount = try container.decodeLossyIntIfPresent(forKey: .commentsCount) ?? 0
+        commentsCount = try container.decodeLossyIntIfPresent(forKey: .commentsCount)
+            ?? totalComments
+            ?? 0
         isFavourite = try container.decodeIfPresent(Bool.self, forKey: .isFavourite) ?? false
         isLiked = try container.decodeIfPresent(Bool.self, forKey: .isLiked) ?? false
     }
 }
 
+/// Response payload wrapping one comic detail.
 nonisolated struct ComicDetailsResponse: Decodable, Sendable {
     let comic: ComicDetail
 }
 
+extension ComicDetail {
+    init(offlineRecord record: OfflineComicRecord) {
+        id = record.id
+        creator = .placeholder
+        title = record.title
+        description = ""
+        thumb = .placeholder
+        author = nil
+        categories = []
+        chineseTeam = ""
+        tags = []
+        pagesCount = record.imageCount
+        epsCount = record.chapters.count
+        finished = false
+        updatedAt = record.updatedAt
+        createdAt = record.createdAt
+        allowDownload = true
+        allowComment = false
+        totalLikes = 0
+        totalViews = 0
+        totalComments = 0
+        viewsCount = 0
+        likesCount = 0
+        commentsCount = 0
+        isFavourite = false
+        isLiked = false
+    }
+}
+
 // MARK: - Chapter
+/// Chapter identity and ordering metadata.
 nonisolated struct PicaChapter: Decodable, Identifiable, Sendable {
     let uid: String
     let title: String
     let order: Int
     let updatedAt: String
     let id: String
+
+    init(uid: String, title: String, order: Int, updatedAt: String = "", id: String) {
+        self.uid = uid
+        self.title = title
+        self.order = order
+        self.updatedAt = updatedAt
+        self.id = id
+    }
     
     enum CodingKeys: String, CodingKey {
         case uid = "_id"
@@ -359,6 +455,7 @@ nonisolated struct PicaChapter: Decodable, Identifiable, Sendable {
     }
 }
 
+/// Paginated chapter collection.
 nonisolated struct ChaptersList: Decodable, Sendable {
     let docs: [PicaChapter]
     let total: Int
@@ -367,52 +464,33 @@ nonisolated struct ChaptersList: Decodable, Sendable {
     let pages: Int
 }
 
+/// Response payload wrapping a chapter collection.
 nonisolated struct ChaptersResponse: Decodable, Sendable {
     let eps: ChaptersList
 }
 
 // MARK: - Recommend
-nonisolated struct RecommendComic: Decodable, Identifiable, Sendable {
-    let id: String
-    let title: String
-    let author: String
-    let thumb: ImageDetail
-    let pagesCount: Int
-    let epsCount: Int
-    let finished: Bool
-    let categories: [String]
-    let likesCount: Int
-    
-    enum CodingKeys: String, CodingKey {
-        case id = "_id"
-        case title, author, thumb, pagesCount, epsCount, finished, categories, likesCount
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(String.self, forKey: .id)
-        title = try container.decode(String.self, forKey: .title)
-        author = try container.decodeIfPresent(String.self, forKey: .author) ?? ""
-        thumb = try container.decodeIfPresent(ImageDetail.self, forKey: .thumb) ?? .placeholder
-        pagesCount = try container.decodeLossyIntIfPresent(forKey: .pagesCount) ?? 0
-        epsCount = try container.decodeLossyIntIfPresent(forKey: .epsCount) ?? 0
-        finished = try container.decode(Bool.self, forKey: .finished)
-        categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
-        likesCount = try container.decodeLossyIntIfPresent(forKey: .likesCount) ?? 0
-    }
-}
-
+/// Recommendation collection associated with a comic.
 nonisolated struct RecommendComics: Decodable, Sendable {
-    let comics: [RecommendComic]
+    let comics: [ComicSummary]
 }
 
 // MARK: - Chapter Images
+/// One image entry in a chapter page list.
 nonisolated struct ChapterImage: Decodable, Identifiable, Sendable {
     let uid: String
     let id: String?
     let media: ImageDetail
+    private var offlineURL: String? = nil
+
+    init(uid: String, id: String?, offlineURL: String) {
+        self.uid = uid
+        self.id = id
+        self.media = .placeholder
+        self.offlineURL = offlineURL
+    }
     
-    var url: String { media.url }
+    var url: String { offlineURL ?? media.url }
     
     enum CodingKeys: String, CodingKey {
         case uid = "_id"
@@ -420,6 +498,7 @@ nonisolated struct ChapterImage: Decodable, Identifiable, Sendable {
     }
 }
 
+/// Paginated chapter-image collection.
 nonisolated struct ChaptersImages: Decodable, Sendable {
     let docs: [ChapterImage]
     let total: Int
@@ -428,6 +507,7 @@ nonisolated struct ChaptersImages: Decodable, Sendable {
     let pages: Int
 }
 
+/// Chapter metadata returned alongside chapter images.
 nonisolated struct ChapterEpisode: Decodable, Sendable {
     let id: String
     let title: String
@@ -438,74 +518,34 @@ nonisolated struct ChapterEpisode: Decodable, Sendable {
     }
 }
 
+/// Combined page and chapter payload returned by the reader endpoint.
 nonisolated struct FetchChapterImagesResponse: Decodable, Sendable {
     let pages: ChaptersImages
     let ep: ChapterEpisode
 }
 
 // MARK: - Action Response
+/// Server acknowledgement for like and favorite mutations.
 nonisolated struct ActionResponse: Decodable, Sendable {
     let action: String
 }
 
 // MARK: - Search
+// PicACG sends the advanced-search page through the URL query.
+// The request body therefore encodes only the keyword and sort order.
+/// Body encoded for advanced comic search.
 nonisolated struct SearchPayload: Encodable, Sendable {
     let keyword: String
-    let page: Int
     let sort: ComicSortType
-    
-    enum CodingKeys: String, CodingKey {
-        case keyword, sort
-    }
 }
 
-nonisolated struct SearchComic: Decodable, Identifiable, Sendable {
-    let uid: String
-    let title: String
-    let author: String
-    let thumb: ImageDetail
-    let totalViews: Int?
-    let categories: [String]
-    let totalLikes: Int?
-    let likesCount: Int
-    let tags: [String]
-    let finished: Bool
-    
-    var id: String { uid }
-    
-    enum CodingKeys: String, CodingKey {
-        case uid = "_id"
-        case title, author, thumb, totalViews, categories, totalLikes, likesCount, tags, finished
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        uid = try container.decode(String.self, forKey: .uid)
-        title = try container.decode(String.self, forKey: .title)
-        author = try container.decodeIfPresent(String.self, forKey: .author) ?? "??"
-        thumb = try container.decodeIfPresent(ImageDetail.self, forKey: .thumb) ?? .placeholder
-        totalViews = try container.decodeLossyIntIfPresent(forKey: .totalViews)
-        categories = try container.decodeIfPresent([String].self, forKey: .categories) ?? []
-        totalLikes = try container.decodeLossyIntIfPresent(forKey: .totalLikes)
-        likesCount = try container.decodeLossyIntIfPresent(forKey: .likesCount) ?? 0
-        tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
-        finished = try container.decode(Bool.self, forKey: .finished)
-    }
-}
-
-nonisolated struct SearchComicsList: Decodable, Sendable {
-    let docs: [SearchComic]
-    let total: Int
-    let limit: Int
-    let page: Int
-    let pages: Int
-}
-
+/// Response payload wrapping advanced-search results.
 nonisolated struct SearchResponse: Decodable, Sendable {
-    let comics: SearchComicsList
+    let comics: ComicsList
 }
 
 // MARK: - User Profile
+/// User response with convenience accessors for profile screens.
 nonisolated struct UserProfileResponse: Decodable, Sendable {
     let user: UserProfile
     
@@ -523,6 +563,7 @@ nonisolated struct UserProfileResponse: Decodable, Sendable {
     var comicsUploaded: Int { user.comicsUploaded }
 }
 
+/// Authenticated account profile returned by PicACG.
 nonisolated struct UserProfile: Decodable, Sendable {
     let id: String
     let birthday: String
@@ -570,6 +611,7 @@ nonisolated struct UserProfile: Decodable, Sendable {
 }
 
 // MARK: - Rank
+/// Time windows supported by the ranking endpoint.
 nonisolated enum ComicRankType: String, CaseIterable, Identifiable, Sendable {
     case daily = "H24"
     case weekly = "D7"
@@ -586,6 +628,7 @@ nonisolated enum ComicRankType: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Query fields required by ranking requests.
 nonisolated struct ComicRankPayload: Sendable {
     let tt: String
     let ct: String
@@ -595,16 +638,19 @@ nonisolated struct ComicRankPayload: Sendable {
     }
 }
 
+/// Ranked comic collection returned by the API.
 nonisolated struct ComicRankResponse: Decodable, Sendable {
-    let comics: [ComicDoc]
+    let comics: [ComicSummary]
 }
 
 // MARK: - Random
+/// Random comic collection returned by the discovery endpoint.
 nonisolated struct RandomComicsResponse: Decodable, Sendable {
     let comics: ComicsList
 }
 
 // MARK: - User Favorite
+/// Query fields used to paginate the current user's favorites.
 nonisolated struct UserFavoritePayload: Sendable {
     let page: Int
     let sort: ComicSortType
@@ -615,6 +661,7 @@ nonisolated struct UserFavoritePayload: Sendable {
 }
 
 // MARK: - Notifications
+/// User notification displayed by the profile screen.
 nonisolated struct PicaNotification: Decodable, Identifiable, Sendable {
     let id: String
     let title: String
@@ -628,6 +675,7 @@ nonisolated struct PicaNotification: Decodable, Identifiable, Sendable {
     }
 }
 
+/// Paginated notification collection.
 nonisolated struct NotificationsList: Decodable, Sendable {
     let docs: [PicaNotification]
     let total: Int
@@ -636,16 +684,19 @@ nonisolated struct NotificationsList: Decodable, Sendable {
     let pages: Int
 }
 
+/// Response payload wrapping notifications.
 nonisolated struct NotificationsResponse: Decodable, Sendable {
     let notifications: NotificationsList
 }
 
 // MARK: - Hot Search
+/// Trending keywords returned for search suggestions.
 nonisolated struct HotSearchWordsResponse: Decodable, Sendable {
     let keywords: [String]
 }
 
 // MARK: - Extra Recommend
+/// Compact recommendation item returned by legacy endpoints.
 nonisolated struct ExtraRecommendComic: Decodable, Sendable {
     let id: String
     let title: String
@@ -653,11 +704,27 @@ nonisolated struct ExtraRecommendComic: Decodable, Sendable {
 }
 
 private extension KeyedDecodingContainer {
-    nonisolated func decodeLossyIntIfPresent(forKey key: Key) throws -> Int? {
-        if let value = try decodeIfPresent(Int.self, forKey: key) {
+    nonisolated func decodeLossyStringIfPresent(forKey key: Key) throws -> String? {
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
             return value
         }
-        if let value = try decodeIfPresent(String.self, forKey: key) {
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return String(value)
+        }
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return String(value)
+        }
+        return nil
+    }
+
+    nonisolated func decodeLossyIntIfPresent(forKey key: Key) throws -> Int? {
+        // Integer fields occasionally arrive as strings. Treat an Int type
+        // mismatch as a signal to retry string decoding instead of failing
+        // the entire response.
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return value
+        }
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
             return Int(value)
         }
         return nil

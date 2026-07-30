@@ -1,5 +1,7 @@
 import Foundation
+import CryptoKit
 
+/// Loads, rewrites, and caches comic images for the active network route.
 actor ImageLoader {
     static let shared = ImageLoader()
     
@@ -9,6 +11,7 @@ actor ImageLoader {
     private var currentCacheSize = 0
     private var cacheOrder: [String] = []
     private let session: URLSession
+    private let diskCacheDirectory: URL
     
     private init() {
         let configuration = URLSessionConfiguration.default
@@ -17,24 +20,44 @@ actor ImageLoader {
         configuration.timeoutIntervalForResource = 90
         configuration.httpMaximumConnectionsPerHost = 6
         session = URLSession(configuration: configuration)
+        let cachesDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        diskCacheDirectory = cachesDirectory.appendingPathComponent("ShirayukiImageCache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
     }
     
+    /// Loads an image at the persisted quality setting.
     func loadImage(from urlString: String) async throws -> Data? {
-        guard let url = URL(string: urlString) else { return nil }
+        try await loadImage(from: urlString, quality: AppImageQuality.stored)
+    }
+
+    /// Resolves the active route, then loads an image from memory, disk, or network.
+    func loadImage(from urlString: String, quality: AppImageQuality) async throws -> Data? {
+        let resolvedURLString = await MainActor.run {
+            AppProxyStore.shared.selectedRule.imageURL(for: urlString)
+        }
+        guard let url = URL(string: resolvedURLString) else { return nil }
+        let cacheKey = "\(quality.rawValue)|\(resolvedURLString)"
         
-        if let cached = memoryCache[urlString] {
-            touchCache(for: urlString)
+        if let cached = memoryCache[cacheKey] {
+            touchCache(for: cacheKey)
             return cached
+        }
+
+        if let diskData = try? Data(contentsOf: diskURL(for: cacheKey)) {
+            setCache(key: cacheKey, data: diskData)
+            return diskData
         }
         
         let task: Task<Data, Error>
-        if let existingTask = ongoingTasks[urlString] {
+        if let existingTask = ongoingTasks[cacheKey] {
             task = existingTask
         } else {
             task = Task(priority: .utility) { [session] in
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 20
                 request.setValue("image/webp,image/apng,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
+                request.setValue(quality.rawValue, forHTTPHeaderField: "image-quality")
                 
                 let (data, response) = try await session.data(for: request)
                 
@@ -45,20 +68,21 @@ actor ImageLoader {
                 
                 return data
             }
-            ongoingTasks[urlString] = task
+            ongoingTasks[cacheKey] = task
         }
         
         do {
             let data = try await task.value
-            ongoingTasks.removeValue(forKey: urlString)
-            if memoryCache[urlString] == nil {
-                setCache(key: urlString, data: data)
+            ongoingTasks.removeValue(forKey: cacheKey)
+            if memoryCache[cacheKey] == nil {
+                setCache(key: cacheKey, data: data)
+                try? data.write(to: diskURL(for: cacheKey), options: .atomic)
             } else {
-                touchCache(for: urlString)
+                touchCache(for: cacheKey)
             }
             return data
         } catch {
-            ongoingTasks.removeValue(forKey: urlString)
+            ongoingTasks.removeValue(forKey: cacheKey)
             throw error
         }
     }
@@ -81,19 +105,52 @@ actor ImageLoader {
         cacheOrder.append(key)
     }
     
+    /// Starts best-effort utility-priority loads for unique URLs.
     func preload(urls: [String]) {
-        let uniqueURLs = Array(Set(urls))
-        for urlString in uniqueURLs {
-            guard memoryCache[urlString] == nil, ongoingTasks[urlString] == nil else { continue }
+        for urlString in Set(urls) {
             Task(priority: .utility) {
                 _ = try? await loadImage(from: urlString)
             }
         }
     }
     
+    /// Removes all in-memory and on-disk image cache entries.
     func clear() {
         memoryCache.removeAll()
         cacheOrder.removeAll()
         currentCacheSize = 0
+        try? FileManager.default.removeItem(at: diskCacheDirectory)
+        try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
+    }
+
+    /// Returns the total number of bytes currently stored on disk.
+    func cacheSize() -> Int {
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: diskCacheDirectory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return 0
+        }
+        return files.reduce(0) { total, url in
+            total + ((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+    }
+
+    /// Evicts one quality-specific image from both cache tiers.
+    func removeCachedImage(from urlString: String, quality: AppImageQuality) {
+        let cacheKey = "\(quality.rawValue)|\(urlString)"
+        if let data = memoryCache.removeValue(forKey: cacheKey) {
+            currentCacheSize -= data.count
+        }
+        cacheOrder.removeAll { $0 == cacheKey }
+        try? FileManager.default.removeItem(at: diskURL(for: cacheKey))
+    }
+
+    private func diskURL(for cacheKey: String) -> URL {
+        let digest = SHA256.hash(data: Data(cacheKey.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return diskCacheDirectory.appendingPathComponent(digest).appendingPathExtension("data")
     }
 }

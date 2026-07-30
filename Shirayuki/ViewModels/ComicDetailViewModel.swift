@@ -1,18 +1,30 @@
 import Foundation
 import Combine
 
+/// Download lifecycle displayed by the comic detail screen.
+enum ComicDownloadState: Equatable {
+    case idle
+    case downloading(completedImages: Int, totalImages: Int)
+    case completed
+    case failed(String)
+}
+
+/// Coordinates comic metadata, chapter actions, and offline download state.
 @MainActor
-final class ComicDetailViewModel: ObservableObject {
+final class ComicDetailViewModel: ObservableViewModel {
     @Published var comic: ComicDetail?
     @Published var chapters: [PicaChapter] = []
-    @Published var recommendations: [RecommendComic] = []
+    @Published var recommendations: [ComicSummary] = []
     @Published var readProgress: ReaderProgress?
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var isLiked = false
     @Published var isFavorited = false
+    @Published var downloadState: ComicDownloadState = .idle
+    @Published var offlineRecord: OfflineComicRecord?
     
     let comicId: String
+    private var downloadTask: Task<Void, Never>?
     
     init(comicId: String) {
         self.comicId = comicId
@@ -30,14 +42,14 @@ final class ComicDetailViewModel: ObservableObject {
             isFavorited = detail.isFavourite
 
             async let chaptersTask: [PicaChapter] = PicaAPIService.shared.fetchChapters(id: comicId)
-            async let recommendTask: [RecommendComic] = PicaAPIService.shared.fetchRecommendations(id: comicId)
+            async let recommendTask: [ComicSummary] = PicaAPIService.shared.fetchRecommendations(id: comicId)
 
             do {
                 let chaptersResult = try await chaptersTask
                 chapters = chaptersResult.sorted { $0.order < $1.order }
             } catch {
                 chapters = []
-                errorMessage = error.localizedDescription
+                handleError(error)
             }
 
             do {
@@ -45,11 +57,12 @@ final class ComicDetailViewModel: ObservableObject {
             } catch {
                 recommendations = []
             }
+            await refreshOfflineRecord()
         } catch {
             comic = nil
             chapters = []
             recommendations = []
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
     }
 
@@ -62,16 +75,89 @@ final class ComicDetailViewModel: ObservableObject {
             _ = try await PicaAPIService.shared.likeComic(id: comicId)
             isLiked.toggle()
         } catch {
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
     }
-    
+
     func toggleFavorite() async {
         do {
             _ = try await PicaAPIService.shared.favoriteComic(id: comicId)
             isFavorited.toggle()
         } catch {
-            errorMessage = error.localizedDescription
+            handleError(error)
+        }
+    }
+
+    func refreshOfflineRecord() async {
+        offlineRecord = await OfflineComicStore.shared.record(for: comicId)
+    }
+
+    nonisolated static func offlineChapterIDs(in record: OfflineComicRecord?) -> Set<String> {
+        Set(record?.chapters.map(\.id) ?? [])
+    }
+
+    nonisolated static func isFullyOffline(
+        chapters: [PicaChapter],
+        offlineChapterIDs: Set<String>
+    ) -> Bool {
+        !chapters.isEmpty && chapters.allSatisfy { offlineChapterIDs.contains($0.id) }
+    }
+
+    var offlineChapterIDs: Set<String> {
+        Self.offlineChapterIDs(in: offlineRecord)
+    }
+
+    var isFullyOffline: Bool {
+        Self.isFullyOffline(chapters: chapters, offlineChapterIDs: offlineChapterIDs)
+    }
+
+    func startDownload(quality: AppImageQuality, chapters selectedChapters: [PicaChapter]) {
+        guard let comic, !selectedChapters.isEmpty else { return }
+        downloadTask?.cancel()
+        downloadState = .downloading(completedImages: 0, totalImages: 0)
+        let comicID = comic.id
+        let title = comic.title
+        let thumbURL = comic.thumb.url
+        let createdAt = comic.createdAt
+        let updatedAt = comic.updatedAt
+        let chapters = selectedChapters
+        let availableChapters = self.chapters
+        downloadTask = Task(priority: .utility) { [weak self] in
+            do {
+                try await OfflineComicStore.shared.download(
+                    comicID: comicID,
+                    title: title,
+                    thumbURL: thumbURL,
+                    createdAt: createdAt,
+                    updatedAt: updatedAt,
+                    chapters: chapters,
+                    quality: quality,
+                    allChapters: availableChapters,
+                    progress: { progress in
+                        Task { @MainActor [weak self] in
+                            self?.downloadState = .downloading(
+                                completedImages: progress.completedImages,
+                                totalImages: progress.totalImages
+                            )
+                            if progress.totalImages > 0,
+                               progress.completedImages == progress.totalImages {
+                                await self?.refreshOfflineRecord()
+                            }
+                        }
+                    }
+                )
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    self?.downloadState = .completed
+                    Task { await self?.refreshOfflineRecord() }
+                }
+            } catch is CancellationError {
+            } catch {
+                await MainActor.run {
+                    self?.downloadState = .failed(error.localizedDescription)
+                    Task { await self?.refreshOfflineRecord() }
+                }
+            }
         }
     }
 }

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "go2778",
+    "name": "Go2778",
+    "urlString": "https://picaapi.go2778.com/",
+    "isEditable": false,
+    "imageHostReplacement": {
+      "from": "picacomic",
+      "to": "go2778"
+    }
+  }
+]

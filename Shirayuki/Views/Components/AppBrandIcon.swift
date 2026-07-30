@@ -8,6 +8,7 @@ import AppKit
 private typealias PlatformImage = NSImage
 #endif
 
+/// Renders the bundled application icon with a configurable shape.
 struct AppBrandIcon: View {
     var size: CGFloat = 88
     var cornerRadius: CGFloat = 22

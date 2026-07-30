@@ -1,10 +1,11 @@
 import Foundation
 import Combine
 
+/// Owns search query, filters, pagination, suggestions, and history.
 @MainActor
-final class SearchViewModel: ObservableObject {
+final class SearchViewModel: ObservableViewModel {
     @Published var query: String = ""
-    @Published var results: [SearchComic] = []
+    @Published var results: [ComicSummary] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var hotKeywords: [String] = []
@@ -21,8 +22,20 @@ final class SearchViewModel: ObservableObject {
         hotKeywords
     }
     
-    var comics: [SearchComic] {
+    var comics: [ComicSummary] {
         results
+    }
+
+    /// PicACG exposes date ascending as `da`; other sort modes are already directional.
+    nonisolated static func resolvedSortMode(
+        sortMode: ComicSortType,
+        ascending: Bool
+    ) -> ComicSortType {
+        ascending && sortMode == .dd ? .da : sortMode
+    }
+
+    var requestSortMode: ComicSortType {
+        Self.resolvedSortMode(sortMode: sortMode, ascending: sortAscending)
     }
     
     func search(reset: Bool = false) async {
@@ -45,7 +58,7 @@ final class SearchViewModel: ObservableObject {
             let result = try await PicaAPIService.shared.searchComics(
                 keyword: trimmedQuery,
                 page: currentPage,
-                sort: sortMode
+                sort: requestSortMode
             )
             if reset {
                 results = result.docs
@@ -55,7 +68,7 @@ final class SearchViewModel: ObservableObject {
             totalPages = result.pages
         } catch {
             results = []
-            errorMessage = error.localizedDescription
+            handleError(error)
         }
     }
     

@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 
+/// HTTP verbs supported by the PicACG request layer.
 nonisolated enum HTTPMethod: String, Sendable {
     case get = "GET"
     case post = "POST"
@@ -8,6 +9,7 @@ nonisolated enum HTTPMethod: String, Sendable {
     case delete = "DELETE"
 }
 
+/// Transport, authentication, and payload failures exposed to app features.
 nonisolated enum APIError: Error, Equatable, Sendable {
     case invalidURL
     case networkError(Error)
@@ -27,6 +29,8 @@ nonisolated enum APIError: Error, Equatable, Sendable {
         case let (.encodingError(l), .encodingError(r)): return l == r
         case let (.serverError(l1, l2), .serverError(r1, r2)): return l1 == r1 && l2 == r2
         case let (.decodingError(l), .decodingError(r)): return l == r
+        case let (.networkError(l), .networkError(r)):
+            return (l as NSError).isEqual(r as NSError)
         default: return false
         }
     }
@@ -55,6 +59,7 @@ nonisolated enum APIError: Error, Equatable, Sendable {
 
 extension APIError: LocalizedError {}
 
+/// Serializes signed PicACG requests and owns mutable session credentials.
 actor APIClient {
     static let shared = APIClient()
     
@@ -62,9 +67,12 @@ actor APIClient {
     private let secretKey = "~d}$Q7$eIni=V)9\\RK/P.RM4;9[7|@/CA}b~OW!3?EV`:<>M7pddUBL5n|0/*Cn"
     private let nonce = "4ce7a7aa759b40f794d189a88b84aba8"
     
-    private var baseURL: String = "https://picaapi.go2778.com/"
+    private var baseURL: String = "https://picaapi.picacomic.com/"
     private var token: String = ""
     private let session: URLSession
+    // Debounce concurrent 401 responses so AppState receives only one
+    // unauthorized notification within the recovery window.
+    private var lastUnauthorizedNotificationAt: Date?
     
     private init() {
         let configuration = URLSessionConfiguration.default
@@ -75,18 +83,21 @@ actor APIClient {
         session = URLSession(configuration: configuration)
     }
     
+    /// Replaces the API origin used to resolve relative endpoint paths.
     func setBaseURL(_ url: String) {
         self.baseURL = url
     }
     
+    /// Installs the bearer token used by signed authenticated requests.
     func setToken(_ token: String) {
         self.token = token
     }
     
+    /// Removes the in-memory bearer token after logout or authorization failure.
     func clearToken() {
         self.token = ""
     }
-    
+
     private var defaultHeaders: [String: String] {
         [
             "accept": "application/vnd.picacomic.com.v1+json",
@@ -121,11 +132,36 @@ actor APIClient {
         return headers
     }
     
+    /// Sends a request without an HTTP body and decodes its response.
     func request<T: Decodable & Sendable>(
         _ method: HTTPMethod,
         path: String,
+        query: [String: String]? = nil
+    ) async throws -> T {
+        try await request(method, path: path, query: query, bodyData: nil)
+    }
+
+    /// Encodes an HTTP body, sends the signed request, and decodes its response.
+    func request<T: Decodable & Sendable, Body: Encodable & Sendable>(
+        _ method: HTTPMethod,
+        path: String,
         query: [String: String]? = nil,
-        body: [String: Any]? = nil
+        body: Body
+    ) async throws -> T {
+        let bodyData: Data
+        do {
+            bodyData = try JSONEncoder().encode(body)
+        } catch {
+            throw APIError.encodingError(error.localizedDescription)
+        }
+        return try await request(method, path: path, query: query, bodyData: bodyData)
+    }
+
+    private func request<T: Decodable & Sendable>(
+        _ method: HTTPMethod,
+        path: String,
+        query: [String: String]?,
+        bodyData: Data?
     ) async throws -> T {
         let maxRetries = 3
         var lastError: Error?
@@ -133,7 +169,7 @@ actor APIClient {
         for attempt in 0..<maxRetries {
             try Task.checkCancellation()
             do {
-                return try await performRequest(method, path: path, query: query, body: body)
+                return try await performRequest(method, path: path, query: query, bodyData: bodyData)
             } catch is CancellationError {
                 throw CancellationError()
             } catch let error as APIError {
@@ -170,7 +206,7 @@ actor APIClient {
         _ method: HTTPMethod,
         path: String,
         query: [String: String]? = nil,
-        body: [String: Any]? = nil
+        bodyData: Data? = nil
     ) async throws -> T {
         try Task.checkCancellation()
 
@@ -213,12 +249,8 @@ actor APIClient {
             request.setValue(value, forHTTPHeaderField: key)
         }
         
-        if let body = body, method != .get {
-            do {
-                request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            } catch {
-                throw APIError.encodingError(error.localizedDescription)
-            }
+        if method != .get, let bodyData {
+            request.httpBody = bodyData
         }
         
         let (data, response): (Data, URLResponse)
@@ -252,8 +284,20 @@ actor APIClient {
             throw APIError.serverError(400, AppLocalization.text("api.badRequest"))
         case 401:
             token = ""
-            Task { @MainActor in
-                NotificationCenter.default.post(name: .apiClientDidReceiveUnauthorized, object: nil)
+            // Emit at most one unauthorized notification every five seconds.
+            let now = Date()
+            let shouldNotify: Bool = {
+                if let last = lastUnauthorizedNotificationAt,
+                   now.timeIntervalSince(last) < 5 {
+                    return false
+                }
+                return true
+            }()
+            if shouldNotify {
+                lastUnauthorizedNotificationAt = now
+                Task { @MainActor in
+                    NotificationCenter.default.post(name: .apiClientDidReceiveUnauthorized, object: nil)
+                }
             }
             throw APIError.unauthorized
         default:

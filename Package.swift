@@ -11,7 +11,8 @@ let package = Package(
         .target(
             name: "Shirayuki",
             path: "Shirayuki",
-            exclude: ["Assets.xcassets"]
+            exclude: ["Assets.xcassets"],
+            resources: [.process("NetworkRoutes.json")]
         ),
         .testTarget(
             name: "ShirayukiTests",

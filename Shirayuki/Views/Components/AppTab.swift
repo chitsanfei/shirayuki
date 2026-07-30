@@ -1,5 +1,6 @@
 import Foundation
 
+/// Tabs available after authentication.
 enum AppTab: String, CaseIterable, Identifiable {
     case home
     case categories

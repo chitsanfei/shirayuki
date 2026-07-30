@@ -1,10 +1,13 @@
 import SwiftUI
 
 private enum ReaderLayout {
+    static let topToolbarHeight: CGFloat = 64
+    static let bottomToolbarHeight: CGFloat = 190
     static let bottomToolbarVisibleOffset: CGFloat = 186
     static let bottomToolbarHiddenOffset: CGFloat = 22
 }
 
+/// Full-screen reader shell coordinating content, controls, sheets, and errors.
 struct ReaderView: View {
     @StateObject var viewModel: ReaderViewModel
     @Environment(\.dismiss) private var dismiss
@@ -29,6 +32,10 @@ struct ReaderView: View {
                             Spacer()
                         }
                     }
+                    .opacity(shouldShowBottomToolbar ? 0 : 1)
+                    .offset(y: shouldShowBottomToolbar ? 10 : 0)
+                    .allowsHitTesting(!shouldShowBottomToolbar)
+                    .animation(.easeInOut(duration: 0.2), value: shouldShowBottomToolbar)
                 }
                 
                 ReaderTopToolbar(
@@ -45,8 +52,14 @@ struct ReaderView: View {
                     isVisible: shouldShowBottomToolbar,
                     onChapterTap: { showChapterSheet = true }
                 )
+
             }
             .ignoresSafeArea()
+            .glassToast(
+                message: viewModel.offlineSourceMessage,
+                systemImage: "internaldrive.fill",
+                bottomPadding: geometry.safeAreaInsets.bottom + 90
+            )
             #if os(iOS)
             .statusBar(hidden: !shouldShowTopToolbar)
             #endif
@@ -86,6 +99,17 @@ struct ReaderView: View {
                     HorizontalReader(viewModel: viewModel)
                 }
             }
+            .id(viewModel.readMode)
+            .transition(
+                .asymmetric(
+                    insertion: .scale(scale: 0.94, anchor: .center).combined(with: .opacity),
+                    removal: .scale(scale: 1.06, anchor: .center).combined(with: .opacity)
+                )
+            )
+            .animation(
+                .interpolatingSpring(stiffness: 170, damping: 24),
+                value: viewModel.readMode
+            )
         } else if viewModel.isLoading {
             ReaderLoadingState(onClose: closeReader)
         } else if let errorMessage = viewModel.errorMessage {
@@ -126,6 +150,7 @@ private struct ReaderPageFramePreferenceKey: PreferenceKey {
     }
 }
 
+/// Vertically scrolling reader with zoom and visible-page tracking.
 struct VerticalReader: View {
     @ObservedObject var viewModel: ReaderViewModel
     @State private var scale: CGFloat = 1.0
@@ -137,7 +162,13 @@ struct VerticalReader: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(viewModel.images.enumerated()), id: \.element.uid) { index, image in
-                            ComicAsyncImage(url: image.url)
+                            ComicAsyncImage(
+                                url: image.url,
+                                offlineComicID: viewModel.comic.id,
+                                offlineChapterID: viewModel.currentChapter?.id,
+                                expectedOfflineImageCount: viewModel.images.count,
+                                forceOffline: viewModel.offlineOnly
+                            )
                                 .aspectRatio(contentMode: .fit)
                                 .frame(maxWidth: .infinity)
                                 .scaleEffect(scale)
@@ -167,14 +198,20 @@ struct VerticalReader: View {
                     withAnimation(.easeInOut(duration: 0.22)) {
                         proxy.scrollTo(target, anchor: .top)
                     }
+                    viewModel.consumeScrollTargetPage()
                 }
                 .onAppear {
+                    // onChange normally drives the initial programmatic scroll.
+                    // Yield one frame when the first layout pass has not yet
+                    // produced a scroll target, avoiding a fixed delay.
                     guard let target = viewModel.scrollTargetPage else { return }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    Task { @MainActor in
+                        await Task.yield()
+                        guard viewModel.scrollTargetPage == target else { return }
                         withAnimation(.easeInOut(duration: 0.22)) {
                             proxy.scrollTo(target, anchor: .top)
                         }
-                        viewModel.scrollTargetPage = nil
+                        viewModel.consumeScrollTargetPage()
                     }
                 }
             }
@@ -224,14 +261,14 @@ struct VerticalReader: View {
         guard let nearest = candidates.min(by: {
             abs($0.frame.midY - targetY) < abs($1.frame.midY - targetY)
         }) else { return }
-        
+
         if nearest.index != viewModel.currentPageIndex {
-            viewModel.currentPageIndex = nearest.index
-            viewModel.preloadAdjacentImages()
+            viewModel.applyUserScrollPage(nearest.index)
         }
     }
 }
 
+/// Horizontally paged reader driven by programmatic selection.
 struct HorizontalReader: View {
     @ObservedObject var viewModel: ReaderViewModel
     
@@ -240,13 +277,18 @@ struct HorizontalReader: View {
             selection: Binding(
                 get: { viewModel.currentPageIndex },
                 set: { newValue in
-                    viewModel.currentPageIndex = newValue
-                    viewModel.preloadAdjacentImages()
+                    viewModel.applyUserScrollPage(newValue)
                 }
             )
         ) {
             ForEach(Array(viewModel.images.enumerated()), id: \.element.uid) { index, image in
-                ZoomableComicImage(url: image.url) {
+                ZoomableComicImage(
+                    url: image.url,
+                    comicID: viewModel.comic.id,
+                    chapterID: viewModel.currentChapter?.id,
+                    expectedImageCount: viewModel.images.count,
+                    forceOffline: viewModel.offlineOnly
+                ) {
                     viewModel.toggleToolbar()
                 }
                 .tag(index)
@@ -255,7 +297,6 @@ struct HorizontalReader: View {
         #if os(iOS)
         .tabViewStyle(.page(indexDisplayMode: .never))
         #endif
-        .id(viewModel.images.map(\.uid).joined())
         .ignoresSafeArea()
         .simultaneousGesture(
             DragGesture(minimumDistance: 8)
@@ -268,8 +309,13 @@ struct HorizontalReader: View {
     }
 }
 
+/// Loads an offline-aware comic image and supports pinch zoom.
 struct ZoomableComicImage: View {
     let url: String
+    let comicID: String
+    let chapterID: String?
+    let expectedImageCount: Int
+    let forceOffline: Bool
     let onSingleTap: () -> Void
     
     @State private var scale: CGFloat = 1.0
@@ -279,7 +325,13 @@ struct ZoomableComicImage: View {
     
     var body: some View {
         GeometryReader { _ in
-            ComicAsyncImage(url: url)
+            ComicAsyncImage(
+                url: url,
+                offlineComicID: comicID,
+        offlineChapterID: chapterID,
+                expectedOfflineImageCount: expectedImageCount,
+                forceOffline: forceOffline
+            )
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .scaleEffect(scale)
@@ -336,6 +388,7 @@ struct ZoomableComicImage: View {
     }
 }
 
+/// Reader header containing navigation and settings controls.
 struct ReaderTopToolbar: View {
     @ObservedObject var viewModel: ReaderViewModel
     let topInset: CGFloat
@@ -343,7 +396,7 @@ struct ReaderTopToolbar: View {
     let onBack: () -> Void
     let onSettings: () -> Void
     
-    private var titleText: String {
+    private var chapterText: String {
         if !viewModel.currentChapterTitle.isEmpty {
             return viewModel.currentChapterTitle
         }
@@ -351,23 +404,26 @@ struct ReaderTopToolbar: View {
     }
     
     var body: some View {
-        VStack {
+        VStack(spacing: 0) {
             HStack(spacing: 12) {
                 ReaderToolbarIconButton(systemImage: "chevron.left", action: onBack)
 
-                ReaderGlassPanel(horizontalPadding: 16, verticalPadding: 14) {
-                    VStack(spacing: 4) {
-                        Text(titleText)
-                            .font(.system(size: 16, weight: .bold))
+                ReaderGlassPanel(horizontalPadding: 16, verticalPadding: 6) {
+                    VStack(spacing: 2) {
+                        Text(viewModel.comic.title)
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
 
-                        Text(viewModel.readMode.displayName)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.68))
+                        Text(chapterText)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity)
                 }
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
 
                 HStack(spacing: 10) {
                     Menu {
@@ -386,17 +442,19 @@ struct ReaderTopToolbar: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, topInset + 8)
+            .padding(.top, topInset + 4)
+            .frame(height: topInset + ReaderLayout.topToolbarHeight, alignment: .top)
             
             Spacer()
         }
-        .offset(y: isVisible ? 0 : -(topInset + 140))
+        .offset(y: isVisible ? 0 : -(topInset + ReaderLayout.topToolbarHeight + 16))
         .opacity(isVisible ? 1 : 0)
         .scaleEffect(isVisible ? 1 : 0.96, anchor: .top)
-        .animation(.spring(response: 0.3, dampingFraction: 0.84), value: isVisible)
+        .animation(.interpolatingSpring(stiffness: 230, damping: 25), value: isVisible)
     }
 }
 
+/// Reader footer containing progress, chapter, and playback controls.
 struct ReaderBottomToolbar: View {
     @ObservedObject var viewModel: ReaderViewModel
     let bottomInset: CGFloat
@@ -408,8 +466,8 @@ struct ReaderBottomToolbar: View {
             Spacer()
             
             if !viewModel.images.isEmpty {
-                ReaderGlassPanel(horizontalPadding: 18, verticalPadding: 18) {
-                    VStack(spacing: 16) {
+                ReaderGlassPanel(horizontalPadding: 18, verticalPadding: 14) {
+                    VStack(spacing: 12) {
                         HStack {
                             Text("\(viewModel.currentPageIndex + 1)")
                                 .font(.system(size: 13, weight: .bold))
@@ -481,13 +539,14 @@ struct ReaderBottomToolbar: View {
                 .padding(.bottom, bottomInset + 12)
             }
         }
-        .offset(y: isVisible ? 0 : 240)
+        .offset(y: isVisible ? 0 : ReaderLayout.bottomToolbarHeight)
         .opacity(isVisible ? 1 : 0)
         .scaleEffect(isVisible ? 1 : 0.96, anchor: .bottom)
-        .animation(.spring(response: 0.3, dampingFraction: 0.84), value: isVisible)
+        .animation(.interpolatingSpring(stiffness: 230, damping: 25), value: isVisible)
     }
 }
 
+/// Selectable chapter catalog with offline and download indicators.
 struct ChapterListSheet: View {
     @ObservedObject var viewModel: ReaderViewModel
     @Environment(\.dismiss) private var dismiss
@@ -502,10 +561,13 @@ struct ChapterListSheet: View {
                             dismiss()
                         }
                     } label: {
-                        HStack {
+                        HStack(spacing: 10) {
                             Text(chapter.title)
                                 .foregroundStyle(viewModel.currentChapterIndex == index ? Color.accentColor : .primary)
                             Spacer()
+                            ReaderChapterDownloadIndicator(
+                                state: viewModel.chapterDownloadState(for: chapter)
+                            )
                             if viewModel.currentChapterIndex == index {
                                 Image(systemName: "checkmark")
                                     .foregroundStyle(Color.accentColor)
@@ -528,6 +590,47 @@ struct ChapterListSheet: View {
     }
 }
 
+private struct ReaderChapterDownloadIndicator: View {
+    let state: ReaderChapterDownloadState
+
+    var body: some View {
+        Group {
+            switch state {
+            case .notDownloaded:
+                Image(systemName: "icloud.and.arrow.down")
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(AppLocalization.text("reader.chapter.onlineOnly"))
+            case .downloaded:
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(.green)
+                    .accessibilityLabel(AppLocalization.text("reader.chapter.downloaded"))
+            case .downloading(let progress):
+                ZStack {
+                    if let fraction = progress.fraction {
+                        Circle()
+                            .stroke(Color.orange.opacity(0.22), lineWidth: 2.5)
+                        Circle()
+                            .trim(from: 0, to: fraction)
+                            .stroke(.orange, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                    } else {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .tint(.orange)
+                    }
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.orange)
+                }
+                .frame(width: 22, height: 22)
+                .accessibilityLabel(AppLocalization.text("reader.chapter.downloading"))
+            }
+        }
+        .font(.system(size: 15, weight: .semibold))
+    }
+}
+
+/// Controls reading mode, page labels, locking, and automatic downloads.
 struct ReaderSettingsSheet: View {
     @ObservedObject var viewModel: ReaderViewModel
     @Environment(\.dismiss) private var dismiss

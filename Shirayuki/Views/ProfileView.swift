@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Presents account metadata, favorites, notifications, and settings.
 struct ProfileView: View {
     @StateObject private var viewModel = ProfileViewModel()
     @ObservedObject private var localization = AppLocalization.shared
@@ -212,6 +213,35 @@ struct ProfileView: View {
                 }
                 Divider().padding(.leading, 60)
             }
+
+            NavigationLink {
+                OfflineComicsView()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 32, height: 32)
+                        .background(Color.accentColor.opacity(0.1))
+                        .clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(localization.text("profile.offline"))
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Text(localization.text("profile.offline.subtitle"))
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            Divider().padding(.leading, 60)
             
             MenuTile(
                 icon: "gearshape.fill",
@@ -253,6 +283,7 @@ struct ProfileView: View {
     }
 }
 
+/// Compact metric displayed in the profile summary.
 struct StatItem: View {
     let value: String
     let label: String
@@ -270,6 +301,7 @@ struct StatItem: View {
     }
 }
 
+/// Navigation container for application settings.
 struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = SettingsViewModel()
@@ -278,11 +310,77 @@ struct SettingsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                appearanceSection
-                networkSection
-                cacheSection
-                sourceSection
-                aboutSection
+                Section {
+                    NavigationLink {
+                        AppearanceSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "paintbrush.fill",
+                            title: localization.text("settings.appearance"),
+                            subtitle: localization.text("settings.appearance.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        RankSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "chart.bar.xaxis",
+                            title: localization.text("settings.rank.title"),
+                            subtitle: localization.text("settings.rank.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        ReadingSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "book.pages.fill",
+                            title: localization.text("settings.reading"),
+                            subtitle: localization.text("settings.reading.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        NetworkSettingsView()
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "network",
+                            title: localization.text("settings.network"),
+                            subtitle: localization.text("settings.network.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        StorageSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "externaldrive.fill",
+                            title: localization.text("settings.cache"),
+                            subtitle: localization.text("settings.cache.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        SourceSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "chevron.left.forwardslash.chevron.right",
+                            title: localization.text("settings.source"),
+                            subtitle: localization.text("settings.source.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
+                        AboutSettingsView(viewModel: viewModel)
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "info.circle.fill",
+                            title: localization.text("settings.about"),
+                            subtitle: localization.text("settings.about.subtitle")
+                        )
+                    }
+                }
             }
             .navigationTitle(localization.text("settings.title"))
             #if os(iOS)
@@ -296,166 +394,4 @@ struct SettingsSheet: View {
         }
     }
 
-    private var themeModeBinding: Binding<AppThemeMode> {
-        Binding(
-            get: { viewModel.themeMode },
-            set: { viewModel.setThemeMode($0) }
-        )
-    }
-
-    private var appearanceSection: some View {
-        Section(localization.text("settings.appearance")) {
-            Picker(localization.text("settings.theme"), selection: themeModeBinding) {
-                ForEach(AppThemeMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-
-            Picker(
-                localization.text("settings.language"),
-                selection: Binding(
-                    get: { viewModel.language },
-                    set: { viewModel.setLanguage($0) }
-                )
-            ) {
-                ForEach(AppLanguage.allCases) { language in
-                    Text(language.displayName).tag(language)
-                }
-            }
-
-            Picker(
-                localization.text("settings.imageQuality"),
-                selection: Binding(
-                    get: { viewModel.imageQuality },
-                    set: { viewModel.setImageQuality($0) }
-                )
-            ) {
-                ForEach(AppImageQuality.allCases) { quality in
-                    Text(quality.displayName).tag(quality)
-                }
-            }
-        }
-    }
-
-    private var networkSection: some View {
-        Section(localization.text("settings.network")) {
-            ForEach(APIEndpoint.allCases) { endpoint in
-                Button {
-                    viewModel.setEndpoint(endpoint)
-                } label: {
-                    endpointRow(endpoint)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private var cacheSection: some View {
-        Section(localization.text("settings.cache")) {
-            Button {
-                viewModel.clearCache()
-            } label: {
-                HStack {
-                    Text(
-                        viewModel.isClearingCache
-                        ? localization.text("settings.cache.clearing")
-                        : localization.text("settings.cache.clear")
-                    )
-                    Spacer()
-                    if viewModel.isClearingCache {
-                        ProgressView()
-                    }
-                }
-            }
-            .disabled(viewModel.isClearingCache)
-
-            if let cacheMessage = viewModel.cacheMessage {
-                Text(cacheMessage)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var sourceSection: some View {
-        Section(localization.text("settings.source")) {
-            HStack {
-                Text(localization.text("settings.deviceCode"))
-                Spacer()
-                Text(viewModel.bundleIdentifier)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
-            }
-
-            if let repositoryURL = viewModel.repositoryURL {
-                Link(destination: repositoryURL) {
-                    Label(localization.text("settings.repository"), systemImage: "chevron.left.forwardslash.chevron.right")
-                }
-            }
-
-            NavigationLink(localization.text("settings.license")) {
-                ScrollView {
-                    Text(viewModel.licenseText)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .navigationTitle(localization.text("settings.license"))
-                #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
-            }
-
-            NavigationLink(localization.text("settings.references")) {
-                ScrollView {
-                    Text(viewModel.thirdPartyNoticesText)
-                        .font(.system(.body, design: .default))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .navigationTitle(localization.text("settings.references"))
-                #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
-            }
-        }
-    }
-
-    private var aboutSection: some View {
-        Section(localization.text("settings.about")) {
-            HStack {
-                Text(localization.text("settings.version"))
-                Spacer()
-                Text(viewModel.appVersion)
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack {
-                Text(localization.text("settings.sdk"))
-                Spacer()
-                Text(viewModel.sdkDisplay)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func endpointRow(_ endpoint: APIEndpoint) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(endpoint.displayName)
-                    .foregroundStyle(.primary)
-                Text(endpoint.description)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.leading)
-            }
-
-            Spacer()
-
-            if viewModel.selectedEndpoint == endpoint {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Color.accentColor)
-            }
-        }
-    }
 }

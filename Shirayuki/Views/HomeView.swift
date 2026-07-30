@@ -1,8 +1,10 @@
 import SwiftUI
 
+/// Presents discovery feeds, rankings, and category entry points.
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @ObservedObject private var localization = AppLocalization.shared
+    @ObservedObject private var rankDisplay = AppRankDisplayStore.shared
     @State private var selectedComicId: String?
 
     var body: some View {
@@ -76,7 +78,11 @@ struct HomeView: View {
                         if viewModel.selectedMode == .latest {
                             ComicCard(comic: comic)
                         } else {
-                            RankComicCard(comic: comic)
+                            RankComicCard(
+                                comic: comic,
+                                metadataDisplay: rankDisplay.display,
+                                maxTagCount: rankDisplay.maxTagCount
+                            )
                         }
                     }
                     .contentShape(Rectangle())
@@ -131,6 +137,7 @@ struct HomeView: View {
     }
 }
 
+/// Selectable category filter used by the home screen.
 struct CategoryChip: View {
     let title: String
     let systemImage: String

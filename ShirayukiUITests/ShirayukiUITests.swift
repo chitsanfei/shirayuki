@@ -1,5 +1,6 @@
 import XCTest
 
+/// Exercises critical application flows through the installed UI.
 final class ShirayukiUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
