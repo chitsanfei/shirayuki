@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 
+/// Persisted metadata for one downloaded comic image.
 nonisolated struct OfflineImageRecord: Codable, Sendable, Identifiable {
     let id: String
     let url: String
@@ -8,6 +9,7 @@ nonisolated struct OfflineImageRecord: Codable, Sendable, Identifiable {
     let byteCount: Int
 }
 
+/// Persisted chapter containing locally available image records.
 nonisolated struct OfflineChapterRecord: Codable, Sendable, Identifiable {
     let id: String
     let title: String
@@ -16,6 +18,7 @@ nonisolated struct OfflineChapterRecord: Codable, Sendable, Identifiable {
     let images: [OfflineImageRecord]
 }
 
+/// Lightweight chapter metadata retained for the full offline catalog.
 nonisolated struct OfflineChapterMetadata: Codable, Sendable, Equatable {
     let id: String
     let title: String
@@ -32,6 +35,7 @@ nonisolated struct OfflineChapterMetadata: Codable, Sendable, Equatable {
     }
 }
 
+/// Root metadata record for a downloaded or partially downloaded comic.
 nonisolated struct OfflineComicRecord: Codable, Sendable, Identifiable {
     let id: String
     let title: String
@@ -102,6 +106,7 @@ nonisolated struct OfflineComicRecord: Codable, Sendable, Identifiable {
     }
 }
 
+/// Aggregate image-download progress for UI presentation.
 nonisolated struct OfflineDownloadProgress: Sendable, Equatable {
     let completedImages: Int
     let totalImages: Int
@@ -112,12 +117,14 @@ nonisolated struct OfflineDownloadProgress: Sendable, Equatable {
     }
 }
 
+/// Source selected when resolving a reader image.
 nonisolated enum OfflineImageSource: Sendable, Equatable {
     case none
     case offline
     case online
 }
 
+/// Serializes offline comic downloads and filesystem metadata updates.
 actor OfflineComicStore {
     static let shared = OfflineComicStore()
 
@@ -131,6 +138,7 @@ actor OfflineComicStore {
         try? fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
     }
 
+    /// Returns every valid offline record ordered by download date.
     func allComics() -> [OfflineComicRecord] {
         guard let directories = try? fileManager.contentsOfDirectory(
             at: rootDirectory,
@@ -140,10 +148,12 @@ actor OfflineComicStore {
         return directories.compactMap(loadRecord(at:)).sorted { $0.downloadedAt > $1.downloadedAt }
     }
 
+    /// Loads one comic's persisted offline metadata.
     func record(for comicID: String) -> OfflineComicRecord? {
         loadRecord(at: directory(for: comicID))
     }
 
+    /// Replaces the stored full chapter catalog without changing downloads.
     func updateChapterCatalog(comicID: String, chapters: [PicaChapter]) throws {
         guard !chapters.isEmpty, let record = record(for: comicID) else { return }
         let updatedRecord = OfflineComicRecord(
@@ -160,6 +170,7 @@ actor OfflineComicStore {
         try persist(updatedRecord, in: directory(for: comicID))
     }
 
+    /// Returns total bytes occupied by the offline library.
     func storageSize() -> Int {
         guard let enumerator = fileManager.enumerator(
             at: rootDirectory,
@@ -172,6 +183,7 @@ actor OfflineComicStore {
         }
     }
 
+    /// Reads persisted bytes for a downloaded image.
     func imageData(
         comicID: String,
         chapterID: String,
@@ -186,6 +198,7 @@ actor OfflineComicStore {
         return try? Data(contentsOf: directory(for: comicID).appendingPathComponent(image.fileName))
     }
 
+    /// Chooses offline or online data based on quality and caller policy.
     func source(
         comicID: String,
         chapterID: String,
@@ -197,18 +210,21 @@ actor OfflineComicStore {
         return .offline
     }
 
+    /// Returns chapter images when the stored quality satisfies the request.
     func offlineChapterImages(comicID: String, chapterID: String, quality: AppImageQuality) -> [OfflineImageRecord]? {
         guard let chapter = record(for: comicID)?.chapters.first(where: { $0.id == chapterID }),
               chapter.quality.isAtLeast(quality) else { return nil }
         return chapter.images
     }
 
+    /// Returns a downloaded chapter when its quality satisfies the request.
     func offlineChapter(comicID: String, chapterID: String, quality: AppImageQuality) -> OfflineChapterRecord? {
         guard let chapter = record(for: comicID)?.chapters.first(where: { $0.id == chapterID }),
               chapter.quality.isAtLeast(quality) else { return nil }
         return chapter
     }
 
+    /// Downloads selected chapters atomically and reports aggregate progress.
     func download(
         comicID: String,
         title: String,
@@ -344,10 +360,12 @@ actor OfflineComicStore {
         )
     }
 
+    /// Removes one comic and all of its downloaded files.
     func delete(comicID: String) throws {
         try fileManager.removeItem(at: directory(for: comicID))
     }
 
+    /// Clears the complete offline library and recreates its root directory.
     func deleteAll() throws {
         try fileManager.removeItem(at: rootDirectory)
         try fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true)

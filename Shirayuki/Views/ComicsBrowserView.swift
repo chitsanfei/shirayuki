@@ -1,6 +1,7 @@
 import Combine
 import SwiftUI
 
+/// Data source represented by the shared paginated comic browser.
 enum ComicsBrowserSource: Hashable, Identifiable, Sendable {
     case category(String)
     case favorites
@@ -42,6 +43,7 @@ enum ComicsBrowserSource: Hashable, Identifiable, Sendable {
     }
 }
 
+/// Loads and paginates comics for a configured browser source.
 @MainActor
 final class ComicsBrowserViewModel: ObservableViewModel {
     @Published var comics: [ComicSummary] = []
@@ -106,6 +108,7 @@ final class ComicsBrowserViewModel: ObservableViewModel {
     }
 }
 
+/// Shared list screen for categories and account favorites.
 struct ComicsBrowserView: View {
     let source: ComicsBrowserSource
     

@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Adaptive grid that materializes stable identifiers and reveal animations.
 struct ComicSelectionGrid<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
     private let items: [Data.Element]
     private let id: KeyPath<Data.Element, ID>
@@ -51,6 +52,7 @@ private struct IndexedGridItem<Value, ID: Hashable>: Identifiable {
     var id: ID { itemID }
 }
 
+/// Placeholder grid displayed while comic data is loading.
 struct ComicSelectionGridSkeleton: View {
     private let placeholders = Array(0..<4)
 
@@ -115,6 +117,7 @@ private struct LazyGridRevealModifier: ViewModifier {
 }
 
 extension View {
+    /// Applies a staggered reveal animation based on grid position.
     func lazyGridReveal(index: Int) -> some View {
         modifier(LazyGridRevealModifier(index: index))
     }

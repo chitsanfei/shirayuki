@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Standard comic card used by discovery grids.
 struct ComicCard: View {
     let comic: ComicSummary
     @ObservedObject private var localization = AppLocalization.shared
@@ -56,6 +57,7 @@ struct ComicCard: View {
     }
 }
 
+/// Ranking card with configurable category or tag metadata.
 struct RankComicCard: View {
     let comic: ComicSummary
     let metadataDisplay: RankMetadataDisplay
@@ -139,6 +141,7 @@ struct RankComicCard: View {
     }
 }
 
+/// Search-result card with query-relevant comic metadata.
 struct SearchComicCard: View {
     let comic: ComicSummary
     @ObservedObject private var localization = AppLocalization.shared

@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+/// Loads account, favorites, and notification content for the profile screen.
 @MainActor
 final class ProfileViewModel: ObservableViewModel {
     @Published var isLoading = false

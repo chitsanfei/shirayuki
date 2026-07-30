@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+/// Loads home discovery, ranking, and category content.
 @MainActor
 final class HomeViewModel: ObservableViewModel {
     @Published var comics: [ComicSummary] = []
@@ -82,6 +83,7 @@ final class HomeViewModel: ObservableViewModel {
     }
 }
 
+/// Discovery feed selected on the home screen.
 enum HomeDisplayMode: String, CaseIterable, Identifiable {
     case latest
     case daily

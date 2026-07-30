@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 
+/// Loads, rewrites, and caches comic images for the active network route.
 actor ImageLoader {
     static let shared = ImageLoader()
     
@@ -25,10 +26,12 @@ actor ImageLoader {
         try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
     }
     
+    /// Loads an image at the persisted quality setting.
     func loadImage(from urlString: String) async throws -> Data? {
         try await loadImage(from: urlString, quality: AppImageQuality.stored)
     }
 
+    /// Resolves the active route, then loads an image from memory, disk, or network.
     func loadImage(from urlString: String, quality: AppImageQuality) async throws -> Data? {
         let resolvedURLString = await MainActor.run {
             AppProxyStore.shared.selectedRule.imageURL(for: urlString)
@@ -102,6 +105,7 @@ actor ImageLoader {
         cacheOrder.append(key)
     }
     
+    /// Starts best-effort utility-priority loads for unique URLs.
     func preload(urls: [String]) {
         for urlString in Set(urls) {
             Task(priority: .utility) {
@@ -110,6 +114,7 @@ actor ImageLoader {
         }
     }
     
+    /// Removes all in-memory and on-disk image cache entries.
     func clear() {
         memoryCache.removeAll()
         cacheOrder.removeAll()
@@ -118,6 +123,7 @@ actor ImageLoader {
         try? FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
     }
 
+    /// Returns the total number of bytes currently stored on disk.
     func cacheSize() -> Int {
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: diskCacheDirectory,
@@ -131,6 +137,7 @@ actor ImageLoader {
         }
     }
 
+    /// Evicts one quality-specific image from both cache tiers.
     func removeCachedImage(from urlString: String, quality: AppImageQuality) {
         let cacheKey = "\(quality.rawValue)|\(urlString)"
         if let data = memoryCache.removeValue(forKey: cacheKey) {

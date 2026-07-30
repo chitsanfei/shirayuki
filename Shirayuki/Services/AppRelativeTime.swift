@@ -1,6 +1,8 @@
 import Foundation
 
+/// Parses PicACG timestamps and produces localized relative dates.
 nonisolated enum AppRelativeTime {
+    /// Formats a raw timestamp relative to a reference date.
     static func string(
         from rawValue: String,
         relativeTo referenceDate: Date = Date(),
@@ -13,6 +15,7 @@ nonisolated enum AppRelativeTime {
         return formatter.localizedString(for: date, relativeTo: referenceDate)
     }
 
+    /// Parses fractional ISO-8601, standard ISO-8601, or date-only values.
     static func parse(_ rawValue: String) -> Date? {
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return nil }

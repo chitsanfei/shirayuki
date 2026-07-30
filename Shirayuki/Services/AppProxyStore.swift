@@ -1,17 +1,20 @@
 import Foundation
 import Combine
 
+/// Host substitution applied to image URLs for compatible API relays.
 nonisolated struct AppProxyHostReplacement: Decodable, Equatable, Sendable {
     let from: String
     let to: String
 }
 
+/// Ownership category controlling route persistence and editability.
 nonisolated enum AppProxyRuleSource: String, Sendable {
     case official
     case bundled
     case user
 }
 
+/// Validated API route used by requests and image loading.
 nonisolated struct AppProxyRule: Equatable, Identifiable, Sendable {
     let id: String
     var name: String
@@ -52,6 +55,7 @@ nonisolated struct AppProxyRule: Equatable, Identifiable, Sendable {
         source == .user
     }
 
+    /// Applies this route's optional image-host substitution.
     func imageURL(for urlString: String) -> String {
         guard let replacement = imageHostReplacement,
               !replacement.from.isEmpty,
@@ -73,6 +77,7 @@ nonisolated struct AppProxyRule: Equatable, Identifiable, Sendable {
         isEditable: false
     )
 
+    /// Validates and normalizes an HTTP or HTTPS API origin.
     static func validURL(from rawValue: String?) -> URL? {
         guard let rawValue else { return nil }
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -95,6 +100,7 @@ nonisolated struct AppProxyRule: Equatable, Identifiable, Sendable {
         return components.url
     }
 
+    /// Decodes bundled route definitions and rejects invalid entries.
     static func decodeBundledRules(from data: Data) -> [AppProxyRule] {
         guard let definitions = try? JSONDecoder().decode([BundledRuleDefinition].self, from: data) else {
             return []
@@ -121,6 +127,7 @@ nonisolated struct AppProxyRule: Equatable, Identifiable, Sendable {
         }
     }
 
+    /// Loads bundled routes from the packaged JSON resource.
     static func loadBundledRules() -> [AppProxyRule] {
         #if SWIFT_PACKAGE
         let bundle = Bundle.module
@@ -149,6 +156,7 @@ nonisolated private struct StoredProxyRule: Codable {
     let urlString: String
 }
 
+/// Publishes, validates, orders, and persists available API routes.
 @MainActor
 final class AppProxyStore: ObservableObject {
     static let shared = AppProxyStore()
@@ -195,6 +203,7 @@ final class AppProxyStore: ObservableObject {
         }
     }
 
+    /// Selects a known route and immediately updates the API client.
     func select(_ rule: AppProxyRule) {
         guard let storedRule = rules.first(where: { $0.id == rule.id }) else { return }
         selectedRuleID = storedRule.id
@@ -204,6 +213,7 @@ final class AppProxyStore: ObservableObject {
         }
     }
 
+    /// Creates or updates a user route after validating its name and URL.
     func saveUserRule(id: String?, name: String, urlString: String) -> Bool {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty,
@@ -235,6 +245,7 @@ final class AppProxyStore: ObservableObject {
         return true
     }
 
+    /// Deletes an editable user route and restores the official route if needed.
     func deleteUserRule(_ rule: AppProxyRule) {
         guard rule.canDelete else { return }
         rules.removeAll { $0.id == rule.id }

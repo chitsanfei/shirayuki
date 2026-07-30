@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Standard navigation row used by settings categories.
 struct SettingsCategoryRow: View {
     let icon: String
     let title: String
@@ -23,6 +24,7 @@ struct SettingsCategoryRow: View {
     }
 }
 
+/// Controls application theme, language, and image quality.
 struct AppearanceSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var localization = AppLocalization.shared
@@ -62,6 +64,7 @@ struct AppearanceSettingsView: View {
     }
 }
 
+/// Controls metadata shown by ranking cards.
 struct RankSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var localization = AppLocalization.shared
@@ -105,6 +108,7 @@ struct RankSettingsView: View {
     }
 }
 
+/// Controls reader behavior and presentation defaults.
 struct ReadingSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var readerSettings = AppReaderSettingsStore.shared
@@ -202,6 +206,7 @@ struct ReadingSettingsView: View {
     }
 }
 
+/// Selects, creates, edits, and deletes API routes.
 struct NetworkSettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @ObservedObject private var proxyStore = AppProxyStore.shared
@@ -341,6 +346,7 @@ private struct ProxyEditorSheet: View {
     }
 }
 
+/// Reports and clears image-cache and offline storage.
 struct StorageSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var localization = AppLocalization.shared
@@ -443,6 +449,7 @@ private struct StorageLegend: View {
     }
 }
 
+/// Displays source-code and design-reference information.
 struct SourceSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var localization = AppLocalization.shared
@@ -489,6 +496,7 @@ struct SourceSettingsView: View {
     }
 }
 
+/// Displays version, license, and third-party notices.
 struct AboutSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var localization = AppLocalization.shared

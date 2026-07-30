@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 
+/// Layout direction used by the comic reader.
 enum ReadMode: String, CaseIterable, Identifiable {
     case vertical = "vertical"
     case horizontal = "horizontal"
@@ -15,12 +16,14 @@ enum ReadMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Offline availability and active download state for one chapter.
 nonisolated enum ReaderChapterDownloadState: Equatable, Sendable {
     case notDownloaded
     case downloading(OfflineDownloadProgress)
     case downloaded
 }
 
+/// Coordinates chapter loading, reading progress, preloading, and offline fallback.
 @MainActor
 final class ReaderViewModel: ObservableViewModel {
     @Published var comic: ComicDetail
@@ -34,7 +37,7 @@ final class ReaderViewModel: ObservableViewModel {
         }
     }
 
-    /// 由用户交互（滚动 / 翻页 / Slider）调用：只更新页码与进度副作用，不发起新的程序化滚动。
+    /// Applies a user-driven page change without scheduling another programmatic scroll.
     func applyUserScrollPage(_ index: Int) {
         guard !images.isEmpty else { return }
         let clamped = min(max(index, 0), images.count - 1)
@@ -151,8 +154,8 @@ final class ReaderViewModel: ObservableViewModel {
         self.initialPageIndex = initialPageIndex
     }
 
-    // deinit 在 @MainActor 类中是非 isolated 的，但只调用 Task.cancel()——
-    // cancel 是 Sendable 且非隔离安全的方法，无需 main actor。这里有意不捕获其他可变状态。
+    // Deinitialization is nonisolated even for a MainActor class. Task.cancel()
+    // is safe here and avoids capturing any other mutable actor state.
     deinit {
         autoTurnTask?.cancel()
         initialLoadTask?.cancel()
@@ -367,7 +370,7 @@ final class ReaderViewModel: ObservableViewModel {
         updateCurrentPage(to: index)
     }
 
-    /// View 在程序化滚动（scrollTo）完成后调用，清空 scrollTargetPage 以避免重复消费。
+    /// Clears the pending programmatic scroll after the view consumes it.
     func consumeScrollTargetPage() {
         scrollTargetPage = nil
     }

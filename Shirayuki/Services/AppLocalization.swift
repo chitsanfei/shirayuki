@@ -1,10 +1,12 @@
 import Foundation
 import Combine
 
+/// Build metadata displayed by the About screen.
 nonisolated struct AppMetadata {
     static let version = "0.1.0"
 }
 
+/// Languages supported by the in-process localization catalog.
 nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
     case simplifiedChinese = "zh-Hans"
     case traditionalChinese = "zh-Hant"
@@ -37,6 +39,7 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
     }
 }
 
+/// Resolves localized strings and publishes the selected app language.
 @MainActor
 final class AppLocalization: ObservableObject {
     static let shared = AppLocalization()

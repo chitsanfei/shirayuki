@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 
+/// Owns authentication, session restoration, and the current user profile.
 @MainActor
 final class AppState: ObservableObject {
     static let shared = AppState()
@@ -18,7 +19,8 @@ final class AppState: ObservableObject {
     private var isRecoveringSession = false
     
     private init() {
-        // Token 只允许存放在 Keychain；UserDefaults 仅用于一次性向后兼容迁移。
+        // Authentication tokens live only in Keychain. UserDefaults is read
+        // once to migrate installations created by older app versions.
         let keychainToken = KeychainTokenStore.readToken()
         let legacyToken = UserDefaults.standard.string(forKey: "pica_token")
         if let keychainToken {

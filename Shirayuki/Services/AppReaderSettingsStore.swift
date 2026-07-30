@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+/// Persists and publishes reader behavior and presentation preferences.
 @MainActor
 final class AppReaderSettingsStore: ObservableObject {
     static let shared = AppReaderSettingsStore()

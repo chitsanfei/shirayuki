@@ -1,6 +1,7 @@
 import XCTest
 @testable import Shirayuki
 
+/// Verifies partial offline chapter state in comic details.
 final class ComicDetailViewModelTests: XCTestCase {
     func testOfflineChapterStateSupportsPartialComicDownloads() {
         let chapters = [

@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import Shirayuki
 
+/// Verifies advanced-search payload and sort-code encoding.
 final class SearchPayloadEncodingTests: XCTestCase {
     func testSearchPayloadEncodesOnlyKeywordAndSort() throws {
         let payload = SearchPayload(keyword: "猫", sort: .dd)

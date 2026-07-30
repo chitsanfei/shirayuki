@@ -10,6 +10,7 @@ private struct ReaderPresentation: Identifiable {
     let pageIndex: Int
 }
 
+/// Presents comic metadata, chapters, actions, and offline download controls.
 struct ComicDetailView: View {
     let comicId: String
     

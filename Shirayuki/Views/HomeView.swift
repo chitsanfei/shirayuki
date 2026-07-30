@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Presents discovery feeds, rankings, and category entry points.
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @ObservedObject private var localization = AppLocalization.shared
@@ -136,6 +137,7 @@ struct HomeView: View {
     }
 }
 
+/// Selectable category filter used by the home screen.
 struct CategoryChip: View {
     let title: String
     let systemImage: String

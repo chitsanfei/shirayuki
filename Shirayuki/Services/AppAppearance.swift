@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// User-selectable color-scheme policy for the application.
 enum AppThemeMode: String, CaseIterable, Identifiable {
     case system
     case light

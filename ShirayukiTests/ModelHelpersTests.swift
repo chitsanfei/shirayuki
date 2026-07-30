@@ -2,6 +2,7 @@ import SwiftUI
 import XCTest
 @testable import Shirayuki
 
+/// Verifies model URL construction, placeholders, and display helpers.
 final class ModelHelpersTests: XCTestCase {
     func testImageDetailBuildsStaticURLWhenMissingSegment() {
         let detail = ImageDetail(

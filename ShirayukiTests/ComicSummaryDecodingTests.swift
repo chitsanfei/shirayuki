@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import Shirayuki
 
+/// Verifies resilient comic-summary decoding across incomplete payloads.
 final class ComicSummaryDecodingTests: XCTestCase {
     private func decode(_ json: String) throws -> ComicSummary {
         try JSONDecoder().decode(ComicSummary.self, from: Data(json.utf8))

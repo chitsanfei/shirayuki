@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+/// Metadata shown beneath comics in ranking lists.
 enum RankMetadataDisplay: String, CaseIterable, Identifiable, Sendable {
     case categories
     case tags
@@ -15,6 +16,7 @@ enum RankMetadataDisplay: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Persists and publishes ranking-card display preferences.
 @MainActor
 final class AppRankDisplayStore: ObservableObject {
     static let shared = AppRankDisplayStore()

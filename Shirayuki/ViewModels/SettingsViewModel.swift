@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 
+/// Coordinates persisted settings, cache operations, and route editing.
 @MainActor
 final class SettingsViewModel: ObservableObject {
     @Published var isClearingCache = false

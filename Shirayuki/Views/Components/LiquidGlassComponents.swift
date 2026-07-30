@@ -7,6 +7,7 @@ import AppKit
 #endif
 
 // MARK: - Comic Cover Image
+/// Displays a comic cover using the shared async image pipeline.
 struct ComicCoverImage: View {
     let url: String?
     var contentMode: ContentMode = .fill
@@ -24,6 +25,7 @@ struct ComicCoverImage: View {
     }
 }
 
+/// Resolves online and offline image sources with loading placeholders.
 struct ComicAsyncImage: View {
     let url: String?
     let offlineComicID: String?
@@ -149,6 +151,7 @@ private struct ComicImageScaling: ViewModifier {
 }
 
 // MARK: - Glass Toolbar Background
+/// Material background shared by floating reader toolbars.
 struct GlassToolbarBackground: View {
     @Environment(\.colorScheme) private var colorScheme
     
@@ -169,6 +172,7 @@ struct GlassToolbarBackground: View {
 }
 
 // MARK: - Page Number Tag
+/// Compact overlay displaying the current reader page.
 struct PageNumberTag: View {
     let text: String
     
@@ -191,6 +195,7 @@ struct PageNumberTag: View {
 }
 
 // MARK: - Settings Block
+/// Grouped settings container with an optional title.
 struct SettingsBlock<Content: View>: View {
     let title: String?
     let content: Content
@@ -225,6 +230,7 @@ struct SettingsBlock<Content: View>: View {
 }
 
 // MARK: - Menu Tile
+/// Icon, title, and subtitle row used by settings menus.
 struct MenuTile: View {
     let icon: String
     let title: String

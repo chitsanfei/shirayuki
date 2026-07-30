@@ -1,5 +1,6 @@
 import Foundation
 
+/// Persisted reader position for one comic.
 nonisolated struct ReaderProgress: Codable, Sendable, Equatable {
     let comicId: String
     let chapterId: String
@@ -9,6 +10,7 @@ nonisolated struct ReaderProgress: Codable, Sendable, Equatable {
     let updatedAt: Date
 }
 
+/// Saves and restores reader positions in UserDefaults.
 @MainActor
 final class ReaderProgressStore {
     static let shared = ReaderProgressStore()
@@ -18,10 +20,12 @@ final class ReaderProgressStore {
 
     private init() {}
 
+    /// Returns the latest saved position for a comic.
     func progress(for comicId: String) -> ReaderProgress? {
         loadProgressMap()[comicId]
     }
 
+    /// Saves a validated chapter and page position.
     func save(
         comicId: String,
         chapterId: String,
@@ -41,6 +45,7 @@ final class ReaderProgressStore {
         persist(progressMap)
     }
 
+    /// Removes the saved position for a comic.
     func clearProgress(for comicId: String) {
         var progressMap = loadProgressMap()
         progressMap.removeValue(forKey: comicId)

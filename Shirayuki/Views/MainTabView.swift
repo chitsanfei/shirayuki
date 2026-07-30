@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Switches between authentication, restoration, and the primary tab hierarchy.
 struct MainTabView: View {
     @EnvironmentObject private var appState: AppState
     @State private var selectedTab: AppTab = .home

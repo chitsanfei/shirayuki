@@ -4,6 +4,7 @@ import Foundation
 // nonisolated and sendable even though the app target defaults to MainActor.
 
 // MARK: - Base Response
+/// Generic envelope returned by PicACG endpoints.
 nonisolated struct BaseResponse<T: Decodable & Sendable>: Decodable, Sendable {
     let code: Int
     let message: String
@@ -11,11 +12,13 @@ nonisolated struct BaseResponse<T: Decodable & Sendable>: Decodable, Sendable {
 }
 
 // MARK: - Login
+/// Credentials encoded for the sign-in endpoint.
 nonisolated struct LoginPayload: Encodable, Sendable {
     let email: String
     let password: String
 }
 
+/// Account fields encoded for registration.
 nonisolated struct RegisterPayload: Encodable, Sendable {
     let email: String
     let password: String
@@ -24,6 +27,7 @@ nonisolated struct RegisterPayload: Encodable, Sendable {
     let gender: String
 }
 
+/// Current and replacement passwords encoded for an update request.
 nonisolated struct PasswordUpdatePayload: Encodable, Sendable {
     let oldPassword: String
     let newPassword: String
@@ -34,19 +38,23 @@ nonisolated struct PasswordUpdatePayload: Encodable, Sendable {
     }
 }
 
+/// Base64 avatar payload sent to the profile endpoint.
 nonisolated struct AvatarUpdatePayload: Encodable, Sendable {
     let avatar: String
 }
 
+/// Editable profile fields sent to the user endpoint.
 nonisolated struct ProfileUpdatePayload: Encodable, Sendable {
     let slogan: String
 }
 
+/// Authentication response containing the bearer token.
 nonisolated struct LoginResponse: Decodable, Sendable {
     let token: String
 }
 
 // MARK: - Image Detail
+/// File-server metadata used to construct a concrete image URL.
 nonisolated struct ImageDetail: Decodable, Sendable {
     let fileServer: String
     let path: String
@@ -82,6 +90,7 @@ nonisolated struct ImageDetail: Decodable, Sendable {
 }
 
 // MARK: - Category
+/// Category metadata displayed by category browsing screens.
 nonisolated struct PicaCategory: Decodable, Identifiable, Sendable {
     let rawId: String?
     let thumb: ImageDetail
@@ -110,16 +119,18 @@ nonisolated struct PicaCategory: Decodable, Identifiable, Sendable {
     }
 }
 
+/// Category-list payload contained by the base response envelope.
 nonisolated struct CategoriesResponse: Decodable, Sendable {
     let categories: [PicaCategory]
 }
 
 // MARK: - Comic Sort Type
+/// Sort codes accepted by PicACG comic and search endpoints.
 nonisolated enum ComicSortType: String, CaseIterable, Encodable, Identifiable, Sendable {
-    case dd = "dd" // 新到旧
-    case da = "da" // 旧到新
-    case ld = "ld" // 最多喜欢
-    case vd = "vd" // 最多观看
+    case dd = "dd" // Newest first
+    case da = "da" // Oldest first
+    case ld = "ld" // Most liked
+    case vd = "vd" // Most viewed
     
     var id: String { rawValue }
     
@@ -134,6 +145,7 @@ nonisolated enum ComicSortType: String, CaseIterable, Encodable, Identifiable, S
 }
 
 // MARK: - Comics Payload
+/// Optional query fields used by comic-list endpoints.
 nonisolated struct ComicsPayload: Sendable {
     let page: Int?
     let c: String?
@@ -157,8 +169,9 @@ nonisolated struct ComicsPayload: Sendable {
 }
 
 // MARK: - Comic Summary (unified comic list item)
-// 合并了原 ComicDoc / RecommendComic / SearchComic 三个近重复的列表 DTO。
-// 所有字段采用容错解码：缺失或类型不符时回退到默认值，避免某一接口少返回字段时整体解码失败。
+// Replaces the former ComicDoc, RecommendComic, and SearchComic list DTOs.
+// Lossy decoding keeps partial API payloads from invalidating an entire list.
+/// Stable, lossily decoded comic representation shared by all list screens.
 nonisolated struct ComicSummary: Decodable, Identifiable, Sendable {
     let id: String
     let title: String
@@ -203,6 +216,7 @@ nonisolated struct ComicSummary: Decodable, Identifiable, Sendable {
 }
 
 // MARK: - Comics List
+/// Paginated comic collection returned by browse and search operations.
 nonisolated struct ComicsList: Decodable, Sendable {
     let docs: [ComicSummary]
     let limit: Int
@@ -219,11 +233,13 @@ nonisolated struct ComicsList: Decodable, Sendable {
     }
 }
 
+/// Response payload wrapping a comic collection.
 nonisolated struct ComicsResponse: Decodable, Sendable {
     let comics: ComicsList
 }
 
 // MARK: - Creator
+/// Public creator profile embedded in comic details.
 nonisolated struct Creator: Decodable, Sendable {
     let id: String
     let gender: String
@@ -294,6 +310,7 @@ nonisolated struct Creator: Decodable, Sendable {
 }
 
 // MARK: - Comic Detail
+/// Complete comic metadata used by detail and reader screens.
 nonisolated struct ComicDetail: Decodable, Identifiable, Sendable {
     let id: String
     let creator: Creator
@@ -370,6 +387,7 @@ nonisolated struct ComicDetail: Decodable, Identifiable, Sendable {
     }
 }
 
+/// Response payload wrapping one comic detail.
 nonisolated struct ComicDetailsResponse: Decodable, Sendable {
     let comic: ComicDetail
 }
@@ -404,6 +422,7 @@ extension ComicDetail {
 }
 
 // MARK: - Chapter
+/// Chapter identity and ordering metadata.
 nonisolated struct PicaChapter: Decodable, Identifiable, Sendable {
     let uid: String
     let title: String
@@ -436,6 +455,7 @@ nonisolated struct PicaChapter: Decodable, Identifiable, Sendable {
     }
 }
 
+/// Paginated chapter collection.
 nonisolated struct ChaptersList: Decodable, Sendable {
     let docs: [PicaChapter]
     let total: Int
@@ -444,16 +464,19 @@ nonisolated struct ChaptersList: Decodable, Sendable {
     let pages: Int
 }
 
+/// Response payload wrapping a chapter collection.
 nonisolated struct ChaptersResponse: Decodable, Sendable {
     let eps: ChaptersList
 }
 
 // MARK: - Recommend
+/// Recommendation collection associated with a comic.
 nonisolated struct RecommendComics: Decodable, Sendable {
     let comics: [ComicSummary]
 }
 
 // MARK: - Chapter Images
+/// One image entry in a chapter page list.
 nonisolated struct ChapterImage: Decodable, Identifiable, Sendable {
     let uid: String
     let id: String?
@@ -475,6 +498,7 @@ nonisolated struct ChapterImage: Decodable, Identifiable, Sendable {
     }
 }
 
+/// Paginated chapter-image collection.
 nonisolated struct ChaptersImages: Decodable, Sendable {
     let docs: [ChapterImage]
     let total: Int
@@ -483,6 +507,7 @@ nonisolated struct ChaptersImages: Decodable, Sendable {
     let pages: Int
 }
 
+/// Chapter metadata returned alongside chapter images.
 nonisolated struct ChapterEpisode: Decodable, Sendable {
     let id: String
     let title: String
@@ -493,29 +518,34 @@ nonisolated struct ChapterEpisode: Decodable, Sendable {
     }
 }
 
+/// Combined page and chapter payload returned by the reader endpoint.
 nonisolated struct FetchChapterImagesResponse: Decodable, Sendable {
     let pages: ChaptersImages
     let ep: ChapterEpisode
 }
 
 // MARK: - Action Response
+/// Server acknowledgement for like and favorite mutations.
 nonisolated struct ActionResponse: Decodable, Sendable {
     let action: String
 }
 
 // MARK: - Search
-// 注意：PicACG 的 /comics/advanced-search 端点 page 由 URL query 传递
-// （见 PicaAPIService.searchComics），body 仅编码 keyword 与 sort。
+// PicACG sends the advanced-search page through the URL query.
+// The request body therefore encodes only the keyword and sort order.
+/// Body encoded for advanced comic search.
 nonisolated struct SearchPayload: Encodable, Sendable {
     let keyword: String
     let sort: ComicSortType
 }
 
+/// Response payload wrapping advanced-search results.
 nonisolated struct SearchResponse: Decodable, Sendable {
     let comics: ComicsList
 }
 
 // MARK: - User Profile
+/// User response with convenience accessors for profile screens.
 nonisolated struct UserProfileResponse: Decodable, Sendable {
     let user: UserProfile
     
@@ -533,6 +563,7 @@ nonisolated struct UserProfileResponse: Decodable, Sendable {
     var comicsUploaded: Int { user.comicsUploaded }
 }
 
+/// Authenticated account profile returned by PicACG.
 nonisolated struct UserProfile: Decodable, Sendable {
     let id: String
     let birthday: String
@@ -580,6 +611,7 @@ nonisolated struct UserProfile: Decodable, Sendable {
 }
 
 // MARK: - Rank
+/// Time windows supported by the ranking endpoint.
 nonisolated enum ComicRankType: String, CaseIterable, Identifiable, Sendable {
     case daily = "H24"
     case weekly = "D7"
@@ -596,6 +628,7 @@ nonisolated enum ComicRankType: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Query fields required by ranking requests.
 nonisolated struct ComicRankPayload: Sendable {
     let tt: String
     let ct: String
@@ -605,16 +638,19 @@ nonisolated struct ComicRankPayload: Sendable {
     }
 }
 
+/// Ranked comic collection returned by the API.
 nonisolated struct ComicRankResponse: Decodable, Sendable {
     let comics: [ComicSummary]
 }
 
 // MARK: - Random
+/// Random comic collection returned by the discovery endpoint.
 nonisolated struct RandomComicsResponse: Decodable, Sendable {
     let comics: ComicsList
 }
 
 // MARK: - User Favorite
+/// Query fields used to paginate the current user's favorites.
 nonisolated struct UserFavoritePayload: Sendable {
     let page: Int
     let sort: ComicSortType
@@ -625,6 +661,7 @@ nonisolated struct UserFavoritePayload: Sendable {
 }
 
 // MARK: - Notifications
+/// User notification displayed by the profile screen.
 nonisolated struct PicaNotification: Decodable, Identifiable, Sendable {
     let id: String
     let title: String
@@ -638,6 +675,7 @@ nonisolated struct PicaNotification: Decodable, Identifiable, Sendable {
     }
 }
 
+/// Paginated notification collection.
 nonisolated struct NotificationsList: Decodable, Sendable {
     let docs: [PicaNotification]
     let total: Int
@@ -646,16 +684,19 @@ nonisolated struct NotificationsList: Decodable, Sendable {
     let pages: Int
 }
 
+/// Response payload wrapping notifications.
 nonisolated struct NotificationsResponse: Decodable, Sendable {
     let notifications: NotificationsList
 }
 
 // MARK: - Hot Search
+/// Trending keywords returned for search suggestions.
 nonisolated struct HotSearchWordsResponse: Decodable, Sendable {
     let keywords: [String]
 }
 
 // MARK: - Extra Recommend
+/// Compact recommendation item returned by legacy endpoints.
 nonisolated struct ExtraRecommendComic: Decodable, Sendable {
     let id: String
     let title: String
@@ -677,9 +718,9 @@ private extension KeyedDecodingContainer {
     }
 
     nonisolated func decodeLossyIntIfPresent(forKey key: Key) throws -> Int? {
-        // 用 try? 容错：当 JSON 值是字符串（如 "42"）时，decodeIfPresent(Int.self)
-        // 会抛出 typeMismatch，原先的 String 分支永远不可达。这里把抛出也视作
-        // “不是 Int”，再尝试按字符串解析，从而真正实现 lossy 解码。
+        // Integer fields occasionally arrive as strings. Treat an Int type
+        // mismatch as a signal to retry string decoding instead of failing
+        // the entire response.
         if let value = try? decodeIfPresent(Int.self, forKey: key) {
             return value
         }

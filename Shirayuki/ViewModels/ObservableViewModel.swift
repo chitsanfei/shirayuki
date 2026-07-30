@@ -1,7 +1,7 @@
 import Foundation
 
-/// 为所有需要展示加载状态与错误的 ViewModel 提供统一的错误处理入口，
-/// 避免每个 ViewModel 重复 `catch { errorMessage = error.localizedDescription }`。
+/// Provides shared loading and error handling for observable view models.
+/// This keeps identical catch blocks out of individual feature models.
 @MainActor
 protocol ObservableViewModel: ObservableObject {
     var isLoading: Bool { get set }
@@ -9,7 +9,7 @@ protocol ObservableViewModel: ObservableObject {
 }
 
 extension ObservableViewModel {
-    /// 统一错误映射：把任意 Error 写入 errorMessage 并清空加载态。
+    /// Maps an arbitrary error to presentation state and ends loading.
     func handleError(_ error: Error) {
         errorMessage = error.localizedDescription
     }

@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+/// Owns search query, filters, pagination, suggestions, and history.
 @MainActor
 final class SearchViewModel: ObservableViewModel {
     @Published var query: String = ""

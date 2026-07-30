@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Collects credentials and an API route for authentication.
 struct LoginView: View {
     @StateObject private var appState = AppState.shared
     @ObservedObject private var localization = AppLocalization.shared

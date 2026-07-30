@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Lists downloaded comics and manages offline reading and deletion.
 struct OfflineComicsView: View {
     @ObservedObject private var localization = AppLocalization.shared
     @State private var records: [OfflineComicRecord] = []

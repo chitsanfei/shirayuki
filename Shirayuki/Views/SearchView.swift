@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Presents comic search, suggestions, history, filters, and results.
 struct SearchView: View {
     @StateObject private var viewModel = SearchViewModel()
     @ObservedObject private var localization = AppLocalization.shared
@@ -228,6 +229,7 @@ struct SearchView: View {
     }
 }
 
+/// Tappable search suggestion or history keyword.
 struct SearchKeywordChip: View {
     let title: String
     var emphasized = false
@@ -253,6 +255,7 @@ struct SearchKeywordChip: View {
     }
 }
 
+/// Modal controls for search ordering.
 struct SearchFiltersSheet: View {
     @ObservedObject var viewModel: SearchViewModel
     @ObservedObject private var localization = AppLocalization.shared

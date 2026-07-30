@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import Shirayuki
 
+/// Verifies PicACG timestamp parsing and localized relative formatting.
 final class AppRelativeTimeTests: XCTestCase {
     func testFormatsWholeDayDifferenceAsRelativeTime() throws {
         let referenceDate = try XCTUnwrap(AppRelativeTime.parse("2026-07-30T12:00:00Z"))

@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import Shirayuki
 
+/// Verifies reader navigation, persistence, and chapter download state.
 @MainActor
 final class ReaderViewModelTests: XCTestCase {
     func testResolvedInitialChapterIndexPrefersChapterIdentityBeforeFallbackIndex() throws {
@@ -84,7 +85,7 @@ final class ReaderViewModelTests: XCTestCase {
 
         viewModel.applyUserScrollPage(3)
         XCTAssertEqual(viewModel.currentPageIndex, 3)
-        // 用户滚动不应触发新的程序化跳转
+        // User scrolling must not schedule another programmatic scroll.
         XCTAssertNil(viewModel.scrollTargetPage)
     }
 

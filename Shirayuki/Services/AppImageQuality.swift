@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+/// Image-quality values accepted by PicACG and offline downloads.
 nonisolated enum AppImageQuality: String, CaseIterable, Identifiable, Codable, Sendable {
     case low
     case medium
@@ -42,6 +43,7 @@ nonisolated enum AppImageQuality: String, CaseIterable, Identifiable, Codable, S
     }
 }
 
+/// Persists and publishes the app-wide image-quality preference.
 @MainActor
 final class AppImageQualityStore: ObservableObject {
     static let shared = AppImageQualityStore()

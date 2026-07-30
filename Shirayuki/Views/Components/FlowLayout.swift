@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Wraps variable-width subviews into left-to-right rows.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
     

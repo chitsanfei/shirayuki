@@ -7,6 +7,7 @@
 
 import XCTest
 
+/// Captures the initial screen for each supported UI configuration.
 final class ShirayukiUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {

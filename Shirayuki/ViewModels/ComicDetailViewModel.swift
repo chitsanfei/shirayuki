@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+/// Download lifecycle displayed by the comic detail screen.
 enum ComicDownloadState: Equatable {
     case idle
     case downloading(completedImages: Int, totalImages: Int)
@@ -8,6 +9,7 @@ enum ComicDownloadState: Equatable {
     case failed(String)
 }
 
+/// Coordinates comic metadata, chapter actions, and offline download state.
 @MainActor
 final class ComicDetailViewModel: ObservableViewModel {
     @Published var comic: ComicDetail?

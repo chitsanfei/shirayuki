@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import Shirayuki
 
+/// Verifies offline catalog persistence and legacy record compatibility.
 final class OfflineComicCatalogTests: XCTestCase {
     func testRecordKeepsFullCatalogAlongsideDownloadedSubset() throws {
         let record = makeRecord(

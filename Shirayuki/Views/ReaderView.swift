@@ -7,6 +7,7 @@ private enum ReaderLayout {
     static let bottomToolbarHiddenOffset: CGFloat = 22
 }
 
+/// Full-screen reader shell coordinating content, controls, sheets, and errors.
 struct ReaderView: View {
     @StateObject var viewModel: ReaderViewModel
     @Environment(\.dismiss) private var dismiss
@@ -149,6 +150,7 @@ private struct ReaderPageFramePreferenceKey: PreferenceKey {
     }
 }
 
+/// Vertically scrolling reader with zoom and visible-page tracking.
 struct VerticalReader: View {
     @ObservedObject var viewModel: ReaderViewModel
     @State private var scale: CGFloat = 1.0
@@ -199,9 +201,9 @@ struct VerticalReader: View {
                     viewModel.consumeScrollTargetPage()
                 }
                 .onAppear {
-                    // 首次出现的程序化跳转由 scrollTargetPage 的 onChange 驱动；
-                    // 若 ScrollView 首帧尚未布局导致 onAppear 时 onChange 未触发，
-                    // 在下一帧再补一次，避免 0.1s 盲等。
+                    // onChange normally drives the initial programmatic scroll.
+                    // Yield one frame when the first layout pass has not yet
+                    // produced a scroll target, avoiding a fixed delay.
                     guard let target = viewModel.scrollTargetPage else { return }
                     Task { @MainActor in
                         await Task.yield()
@@ -266,6 +268,7 @@ struct VerticalReader: View {
     }
 }
 
+/// Horizontally paged reader driven by programmatic selection.
 struct HorizontalReader: View {
     @ObservedObject var viewModel: ReaderViewModel
     
@@ -306,6 +309,7 @@ struct HorizontalReader: View {
     }
 }
 
+/// Loads an offline-aware comic image and supports pinch zoom.
 struct ZoomableComicImage: View {
     let url: String
     let comicID: String
@@ -384,6 +388,7 @@ struct ZoomableComicImage: View {
     }
 }
 
+/// Reader header containing navigation and settings controls.
 struct ReaderTopToolbar: View {
     @ObservedObject var viewModel: ReaderViewModel
     let topInset: CGFloat
@@ -449,6 +454,7 @@ struct ReaderTopToolbar: View {
     }
 }
 
+/// Reader footer containing progress, chapter, and playback controls.
 struct ReaderBottomToolbar: View {
     @ObservedObject var viewModel: ReaderViewModel
     let bottomInset: CGFloat
@@ -540,6 +546,7 @@ struct ReaderBottomToolbar: View {
     }
 }
 
+/// Selectable chapter catalog with offline and download indicators.
 struct ChapterListSheet: View {
     @ObservedObject var viewModel: ReaderViewModel
     @Environment(\.dismiss) private var dismiss
@@ -623,6 +630,7 @@ private struct ReaderChapterDownloadIndicator: View {
     }
 }
 
+/// Controls reading mode, page labels, locking, and automatic downloads.
 struct ReaderSettingsSheet: View {
     @ObservedObject var viewModel: ReaderViewModel
     @Environment(\.dismiss) private var dismiss

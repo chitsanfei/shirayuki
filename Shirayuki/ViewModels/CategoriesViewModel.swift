@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+/// Loads and publishes categories available for comic browsing.
 @MainActor
 final class CategoriesViewModel: ObservableViewModel {
     @Published var categories: [PicaCategory] = []

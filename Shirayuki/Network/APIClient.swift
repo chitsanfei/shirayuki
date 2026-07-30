@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 
+/// HTTP verbs supported by the PicACG request layer.
 nonisolated enum HTTPMethod: String, Sendable {
     case get = "GET"
     case post = "POST"
@@ -8,6 +9,7 @@ nonisolated enum HTTPMethod: String, Sendable {
     case delete = "DELETE"
 }
 
+/// Transport, authentication, and payload failures exposed to app features.
 nonisolated enum APIError: Error, Equatable, Sendable {
     case invalidURL
     case networkError(Error)
@@ -57,6 +59,7 @@ nonisolated enum APIError: Error, Equatable, Sendable {
 
 extension APIError: LocalizedError {}
 
+/// Serializes signed PicACG requests and owns mutable session credentials.
 actor APIClient {
     static let shared = APIClient()
     
@@ -67,8 +70,8 @@ actor APIClient {
     private var baseURL: String = "https://picaapi.picacomic.com/"
     private var token: String = ""
     private let session: URLSession
-    // 401 去抖：多个并发请求同时收到 401 时，只在窗口内首次发送 unauthorized 通知，
-    // 避免 AppState 被并发触发多次会话恢复。
+    // Debounce concurrent 401 responses so AppState receives only one
+    // unauthorized notification within the recovery window.
     private var lastUnauthorizedNotificationAt: Date?
     
     private init() {
@@ -80,14 +83,17 @@ actor APIClient {
         session = URLSession(configuration: configuration)
     }
     
+    /// Replaces the API origin used to resolve relative endpoint paths.
     func setBaseURL(_ url: String) {
         self.baseURL = url
     }
     
+    /// Installs the bearer token used by signed authenticated requests.
     func setToken(_ token: String) {
         self.token = token
     }
     
+    /// Removes the in-memory bearer token after logout or authorization failure.
     func clearToken() {
         self.token = ""
     }
@@ -126,6 +132,7 @@ actor APIClient {
         return headers
     }
     
+    /// Sends a request without an HTTP body and decodes its response.
     func request<T: Decodable & Sendable>(
         _ method: HTTPMethod,
         path: String,
@@ -134,6 +141,7 @@ actor APIClient {
         try await request(method, path: path, query: query, bodyData: nil)
     }
 
+    /// Encodes an HTTP body, sends the signed request, and decodes its response.
     func request<T: Decodable & Sendable, Body: Encodable & Sendable>(
         _ method: HTTPMethod,
         path: String,
@@ -276,7 +284,7 @@ actor APIClient {
             throw APIError.serverError(400, AppLocalization.text("api.badRequest"))
         case 401:
             token = ""
-            // 去抖：5 秒窗口内只发一次 unauthorized 通知，防止并发请求重复触发会话恢复。
+            // Emit at most one unauthorized notification every five seconds.
             let now = Date()
             let shouldNotify: Bool = {
                 if let last = lastUnauthorizedNotificationAt,

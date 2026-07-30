@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Adds a self-dismissing glass toast overlay to a view.
 extension View {
     func glassToast(
         message: String?,

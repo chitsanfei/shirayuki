@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import Shirayuki
 
+/// Verifies semantic equality for each API error case.
 final class APIErrorEquatableTests: XCTestCase {
     func testNetworkErrorsWithSameNSErrorAreEqual() {
         let left = URLError(.notConnectedToInternet)

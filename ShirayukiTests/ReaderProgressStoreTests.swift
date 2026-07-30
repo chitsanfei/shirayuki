@@ -1,6 +1,7 @@
 import XCTest
 @testable import Shirayuki
 
+/// Verifies persisted reader positions and removal behavior.
 @MainActor
 final class ReaderProgressStoreTests: XCTestCase {
     private let comicId = "test-comic-progress"

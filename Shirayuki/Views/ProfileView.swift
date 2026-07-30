@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Presents account metadata, favorites, notifications, and settings.
 struct ProfileView: View {
     @StateObject private var viewModel = ProfileViewModel()
     @ObservedObject private var localization = AppLocalization.shared
@@ -282,6 +283,7 @@ struct ProfileView: View {
     }
 }
 
+/// Compact metric displayed in the profile summary.
 struct StatItem: View {
     let value: String
     let label: String
@@ -299,6 +301,7 @@ struct StatItem: View {
     }
 }
 
+/// Navigation container for application settings.
 struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = SettingsViewModel()

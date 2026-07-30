@@ -1,6 +1,7 @@
 import XCTest
 @testable import Shirayuki
 
+/// Verifies source routing metadata and settings reference text.
 final class RoutingAndSettingsTests: XCTestCase {
     func testCategorySourceDerivesIdentifiersAndMessages() {
         let source = ComicsBrowserSource.category("恋爱")

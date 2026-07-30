@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Application entry point that installs shared state and appearance dependencies.
 @main
 struct ShirayukiApp: App {
     @StateObject private var appState = AppState.shared
