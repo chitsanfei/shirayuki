@@ -217,10 +217,10 @@ struct NetworkSettingsView: View {
                             viewModel.selectProxyRule(rule)
                         } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: rule.isBuiltIn ? "lock.shield.fill" : "network")
-                                    .foregroundStyle(rule.isBuiltIn ? .orange : Color.accentColor)
+                                Image(systemName: rule.isOfficial ? "checkmark.shield.fill" : "network")
+                                    .foregroundStyle(rule.isOfficial ? .green : Color.accentColor)
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(rule.name).foregroundStyle(.primary)
+                                    Text(rule.displayName).foregroundStyle(.primary)
                                     Text(rule.urlString)
                                         .font(.system(size: 11))
                                         .foregroundStyle(.secondary)
@@ -235,11 +235,7 @@ struct NetworkSettingsView: View {
                         }
                         .buttonStyle(.plain)
 
-                        if rule.isBuiltIn {
-                            Image(systemName: "lock.fill")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        } else {
+                        if rule.isEditable {
                             Button {
                                 viewModel.beginEditingProxy(rule)
                                 editor = ProxyEditorContext(rule: rule)
@@ -247,6 +243,9 @@ struct NetworkSettingsView: View {
                                 Image(systemName: "pencil")
                             }
                             .buttonStyle(.borderless)
+                        }
+
+                        if rule.canDelete {
                             Button {
                                 viewModel.deleteProxyRule(rule)
                             } label: {
@@ -254,6 +253,10 @@ struct NetworkSettingsView: View {
                                     .foregroundStyle(.red)
                             }
                             .buttonStyle(.borderless)
+                        } else if !rule.isEditable {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }

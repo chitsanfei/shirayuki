@@ -25,11 +25,16 @@ final class SearchViewModel: ObservableViewModel {
         results
     }
 
-    /// PicACG exposes date ascending as `da`; the other sort modes are already
-    /// directional and do not have a separate ascending counterpart.
+    /// PicACG exposes date ascending as `da`; other sort modes are already directional.
+    nonisolated static func resolvedSortMode(
+        sortMode: ComicSortType,
+        ascending: Bool
+    ) -> ComicSortType {
+        ascending && sortMode == .dd ? .da : sortMode
+    }
+
     var requestSortMode: ComicSortType {
-        guard sortAscending else { return sortMode }
-        return sortMode == .dd ? .da : sortMode
+        Self.resolvedSortMode(sortMode: sortMode, ascending: sortAscending)
     }
     
     func search(reset: Bool = false) async {

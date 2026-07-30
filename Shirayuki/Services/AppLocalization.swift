@@ -579,16 +579,16 @@ nonisolated private enum AppLocalizationCatalog {
             .japanese: "ネットワーク経路"
         ],
         "settings.network.subtitle": [
-            .simplifiedChinese: "选择线路或管理代理配置",
-            .traditionalChinese: "選擇線路或管理代理設定",
-            .english: "Choose a route or manage proxy configurations",
-            .japanese: "経路の選択とプロキシ設定"
+            .simplifiedChinese: "选择 API 线路或管理自定义线路",
+            .traditionalChinese: "選擇 API 線路或管理自訂線路",
+            .english: "Choose an API route or manage custom routes",
+            .japanese: "API経路の選択とカスタム経路の管理"
         ],
         "settings.network.selection": [
-            .simplifiedChinese: "配置选择",
-            .traditionalChinese: "設定選擇",
-            .english: "Configuration Selection",
-            .japanese: "設定の選択"
+            .simplifiedChinese: "线路选择",
+            .traditionalChinese: "線路選擇",
+            .english: "Route Selection",
+            .japanese: "経路の選択"
         ],
         "settings.network.selection.subtitle": [
             .simplifiedChinese: "选择当前使用的网络线路",
@@ -597,76 +597,46 @@ nonisolated private enum AppLocalizationCatalog {
             .japanese: "使用するネットワーク経路を選択"
         ],
         "settings.network.modify": [
-            .simplifiedChinese: "配置修改",
-            .traditionalChinese: "設定修改",
-            .english: "Configuration Editing",
-            .japanese: "設定の編集"
+            .simplifiedChinese: "自定义线路",
+            .traditionalChinese: "自訂線路",
+            .english: "Custom Routes",
+            .japanese: "カスタム経路"
         ],
         "settings.network.modify.subtitle": [
-            .simplifiedChinese: "添加或编辑 HTTP/HTTPS 代理配置",
-            .traditionalChinese: "新增或編輯 HTTP/HTTPS 代理設定",
-            .english: "Add or edit HTTP/HTTPS proxy configurations",
-            .japanese: "HTTP/HTTPSプロキシ設定を追加または編集"
-        ],
-        "settings.proxy.title": [
-            .simplifiedChinese: "代理规则",
-            .traditionalChinese: "代理規則",
-            .english: "Proxy Rule",
-            .japanese: "プロキシルール"
-        ],
-        "settings.proxy.subtitle": [
-            .simplifiedChinese: "输入 HTTP/HTTPS 代理地址，例如 http://127.0.0.1:7890",
-            .traditionalChinese: "輸入 HTTP/HTTPS 代理位址，例如 http://127.0.0.1:7890",
-            .english: "Enter an HTTP/HTTPS proxy, for example http://127.0.0.1:7890",
-            .japanese: "HTTP/HTTPSプロキシを入力（例：http://127.0.0.1:7890）"
-        ],
-        "settings.proxy.placeholder": [
-            .simplifiedChinese: "http://主机:端口",
-            .traditionalChinese: "http://主機:連接埠",
-            .english: "http://host:port",
-            .japanese: "http://ホスト:ポート"
-        ],
-        "settings.proxy.apply": [
-            .simplifiedChinese: "应用代理规则",
-            .traditionalChinese: "套用代理規則",
-            .english: "Apply Proxy Rule",
-            .japanese: "プロキシルールを適用"
-        ],
-        "settings.proxy.requiredForSwitch": [
-            .simplifiedChinese: "配置代理后才可切换官方线路。",
-            .traditionalChinese: "設定代理後才能切換官方線路。",
-            .english: "Configure a proxy before switching to the official route.",
-            .japanese: "公式ルートへ切り替えるにはプロキシを設定してください。"
+            .simplifiedChinese: "添加或编辑兼容 PicACG 的 API 地址",
+            .traditionalChinese: "新增或編輯相容 PicACG 的 API 位址",
+            .english: "Add or edit a PicACG-compatible API URL",
+            .japanese: "PicACG互換API URLを追加または編集"
         ],
         "settings.proxy.name": [
-            .simplifiedChinese: "配置名称",
-            .traditionalChinese: "配置名稱",
-            .english: "Configuration Name",
-            .japanese: "設定名"
+            .simplifiedChinese: "线路名称",
+            .traditionalChinese: "線路名稱",
+            .english: "Route Name",
+            .japanese: "経路名"
         ],
         "settings.proxy.url": [
-            .simplifiedChinese: "HTTP/HTTPS API 地址",
-            .traditionalChinese: "HTTP/HTTPS API 位址",
-            .english: "HTTP/HTTPS API URL",
-            .japanese: "HTTP/HTTPS API URL"
+            .simplifiedChinese: "API 基础地址",
+            .traditionalChinese: "API 基礎位址",
+            .english: "API Base URL",
+            .japanese: "APIベースURL"
         ],
         "settings.proxy.add": [
-            .simplifiedChinese: "添加代理配置",
-            .traditionalChinese: "新增代理設定",
-            .english: "Add Proxy",
-            .japanese: "プロキシを追加"
+            .simplifiedChinese: "添加自定义线路",
+            .traditionalChinese: "新增自訂線路",
+            .english: "Add Custom Route",
+            .japanese: "カスタム経路を追加"
         ],
         "settings.proxy.save": [
-            .simplifiedChinese: "保存代理配置",
-            .traditionalChinese: "儲存代理設定",
-            .english: "Save Proxy",
-            .japanese: "プロキシを保存"
+            .simplifiedChinese: "保存线路",
+            .traditionalChinese: "儲存線路",
+            .english: "Save Route",
+            .japanese: "経路を保存"
         ],
         "settings.proxy.invalid": [
-            .simplifiedChinese: "请输入名称和有效的 HTTP/HTTPS 地址。",
-            .traditionalChinese: "請輸入名稱與有效的 HTTP/HTTPS 位址。",
-            .english: "Enter a name and a valid HTTP/HTTPS URL.",
-            .japanese: "名前と有効なHTTP/HTTPS URLを入力してください。"
+            .simplifiedChinese: "请输入线路名称和有效的 HTTP/HTTPS API 地址。",
+            .traditionalChinese: "請輸入線路名稱與有效的 HTTP/HTTPS API 位址。",
+            .english: "Enter a route name and a valid HTTP/HTTPS API URL.",
+            .japanese: "経路名と有効なHTTP/HTTPS API URLを入力してください。"
         ],
         "settings.rank.title": [
             .simplifiedChinese: "卡片",
@@ -823,24 +793,6 @@ nonisolated private enum AppLocalizationCatalog {
             .traditionalChinese: "Picacomic 官方",
             .english: "Picacomic Official",
             .japanese: "Picacomic 公式"
-        ],
-        "endpoint.picacomic.desc": [
-            .simplifiedChinese: "官方直连，适合可直接访问官方接口的网络环境。",
-            .traditionalChinese: "官方直連，適合可直接存取官方介面的網路環境。",
-            .english: "Direct official route for networks that can reach the official API.",
-            .japanese: "公式APIへ直接接続できるネットワーク向けの公式ルートです。"
-        ],
-        "endpoint.go2778.name": [
-            .simplifiedChinese: "Go2778 代理",
-            .traditionalChinese: "Go2778 代理",
-            .english: "Go2778 Relay",
-            .japanese: "Go2778 リレー"
-        ],
-        "endpoint.go2778.desc": [
-            .simplifiedChinese: "CDN 中转，通常兼容性更好，和参考实现的默认设置一致。",
-            .traditionalChinese: "CDN 中轉，通常相容性更好，與參考實作的預設設定一致。",
-            .english: "CDN relay with better compatibility, matching the reference default.",
-            .japanese: "互換性が高いCDNリレーで、参照実装の既定設定と同じです。"
         ],
         "common.done": [
             .simplifiedChinese: "完成",
@@ -1033,6 +985,24 @@ nonisolated private enum AppLocalizationCatalog {
             .traditionalChinese: "章節列表",
             .english: "Chapters",
             .japanese: "チャプター"
+        ],
+        "reader.chapter.onlineOnly": [
+            .simplifiedChinese: "在线章节",
+            .traditionalChinese: "線上章節",
+            .english: "Online chapter",
+            .japanese: "オンラインチャプター"
+        ],
+        "reader.chapter.downloaded": [
+            .simplifiedChinese: "已下载",
+            .traditionalChinese: "已下載",
+            .english: "Downloaded",
+            .japanese: "ダウンロード済み"
+        ],
+        "reader.chapter.downloading": [
+            .simplifiedChinese: "正在下载",
+            .traditionalChinese: "正在下載",
+            .english: "Downloading",
+            .japanese: "ダウンロード中"
         ],
         "reader.loading.title": [
             .simplifiedChinese: "正在准备阅读内容",

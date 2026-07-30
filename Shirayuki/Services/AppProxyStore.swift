@@ -1,21 +1,76 @@
 import Foundation
 import Combine
 
-nonisolated struct AppProxyRule: Codable, Equatable, Identifiable, Sendable {
+nonisolated struct AppProxyHostReplacement: Decodable, Equatable, Sendable {
+    let from: String
+    let to: String
+}
+
+nonisolated enum AppProxyRuleSource: String, Sendable {
+    case official
+    case bundled
+    case user
+}
+
+nonisolated struct AppProxyRule: Equatable, Identifiable, Sendable {
     let id: String
     var name: String
     var urlString: String
-    let isBuiltIn: Bool
+    let source: AppProxyRuleSource
+    let isEditable: Bool
+    let imageHostReplacement: AppProxyHostReplacement?
+
+    init(
+        id: String,
+        name: String,
+        urlString: String,
+        source: AppProxyRuleSource,
+        isEditable: Bool,
+        imageHostReplacement: AppProxyHostReplacement? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.urlString = urlString
+        self.source = source
+        self.isEditable = isEditable
+        self.imageHostReplacement = imageHostReplacement
+    }
 
     var url: URL? {
         Self.validURL(from: urlString)
     }
 
-    static let go2778 = AppProxyRule(
-        id: "go2778",
-        name: "Go2778",
-        urlString: "https://picaapi.go2778.com/",
-        isBuiltIn: true
+    var displayName: String {
+        isOfficial ? AppLocalization.text("endpoint.picacomic.name") : name
+    }
+
+    var isOfficial: Bool {
+        source == .official
+    }
+
+    var canDelete: Bool {
+        source == .user
+    }
+
+    func imageURL(for urlString: String) -> String {
+        guard let replacement = imageHostReplacement,
+              !replacement.from.isEmpty,
+              !replacement.to.isEmpty,
+              var components = URLComponents(string: urlString),
+              let host = components.host,
+              host.contains(replacement.from) else {
+            return urlString
+        }
+        components.host = host.replacingOccurrences(of: replacement.from, with: replacement.to)
+        return components.url?.absoluteString ?? urlString
+    }
+
+    static let official = AppProxyRule(
+        id: "picacomic",
+        name: "Picacomic",
+        urlString: "https://picaapi.picacomic.com/",
+        source: .official,
+        isEditable: false
     )
 
     static func validURL(from rawValue: String?) -> URL? {
@@ -39,6 +94,59 @@ nonisolated struct AppProxyRule: Codable, Equatable, Identifiable, Sendable {
         }
         return components.url
     }
+
+    static func decodeBundledRules(from data: Data) -> [AppProxyRule] {
+        guard let definitions = try? JSONDecoder().decode([BundledRuleDefinition].self, from: data) else {
+            return []
+        }
+
+        var ids = Set([official.id])
+        return definitions.compactMap { definition -> AppProxyRule? in
+            let id = definition.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = definition.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !id.isEmpty,
+                  !name.isEmpty,
+                  ids.insert(id).inserted,
+                  let url = validURL(from: definition.urlString) else {
+                return nil
+            }
+            return AppProxyRule(
+                id: id,
+                name: name,
+                urlString: url.absoluteString,
+                source: .bundled,
+                isEditable: definition.isEditable,
+                imageHostReplacement: definition.imageHostReplacement
+            )
+        }
+    }
+
+    static func loadBundledRules() -> [AppProxyRule] {
+        #if SWIFT_PACKAGE
+        let bundle = Bundle.module
+        #else
+        let bundle = Bundle.main
+        #endif
+        guard let url = bundle.url(forResource: "NetworkRoutes", withExtension: "json"),
+              let data = try? Data(contentsOf: url) else {
+            return []
+        }
+        return decodeBundledRules(from: data)
+    }
+}
+
+nonisolated private struct BundledRuleDefinition: Decodable {
+    let id: String
+    let name: String
+    let urlString: String
+    let isEditable: Bool
+    let imageHostReplacement: AppProxyHostReplacement?
+}
+
+nonisolated private struct StoredProxyRule: Codable {
+    let id: String
+    let name: String
+    let urlString: String
 }
 
 @MainActor
@@ -52,18 +160,35 @@ final class AppProxyStore: ObservableObject {
     @Published private(set) var selectedRuleID: String
 
     var selectedRule: AppProxyRule {
-        rules.first(where: { $0.id == selectedRuleID }) ?? .go2778
+        rules.first(where: { $0.id == selectedRuleID }) ?? .official
     }
 
     private init() {
-        let storedRules = Self.loadRules()
-        let allRules = [.go2778] + storedRules.filter { !$0.isBuiltIn && $0.id != AppProxyRule.go2778.id }
+        var allRules = [AppProxyRule.official] + AppProxyRule.loadBundledRules()
+        for storedRule in Self.loadStoredRules() {
+            guard let url = AppProxyRule.validURL(from: storedRule.urlString) else { continue }
+            if let index = allRules.firstIndex(where: { $0.id == storedRule.id }) {
+                guard allRules[index].isEditable else { continue }
+                allRules[index].name = storedRule.name
+                allRules[index].urlString = url.absoluteString
+            } else {
+                allRules.append(
+                    AppProxyRule(
+                        id: storedRule.id,
+                        name: storedRule.name,
+                        urlString: url.absoluteString,
+                        source: .user,
+                        isEditable: true
+                    )
+                )
+            }
+        }
         rules = allRules
 
         let storedSelection = UserDefaults.standard.string(forKey: Self.selectedRuleKey)
         selectedRuleID = allRules.contains(where: { $0.id == storedSelection })
             ? storedSelection!
-            : AppProxyRule.go2778.id
+            : AppProxyRule.official.id
 
         Task {
             await APIClient.shared.setBaseURL(selectedRule.urlString)
@@ -71,11 +196,11 @@ final class AppProxyStore: ObservableObject {
     }
 
     func select(_ rule: AppProxyRule) {
-        guard rules.contains(where: { $0.id == rule.id }) else { return }
-        selectedRuleID = rule.id
-        UserDefaults.standard.set(rule.id, forKey: Self.selectedRuleKey)
+        guard let storedRule = rules.first(where: { $0.id == rule.id }) else { return }
+        selectedRuleID = storedRule.id
+        UserDefaults.standard.set(storedRule.id, forKey: Self.selectedRuleKey)
         Task {
-            await APIClient.shared.setBaseURL(rule.urlString)
+            await APIClient.shared.setBaseURL(storedRule.urlString)
         }
     }
 
@@ -87,7 +212,8 @@ final class AppProxyStore: ObservableObject {
         }
 
         if let id,
-           let index = rules.firstIndex(where: { $0.id == id && !$0.isBuiltIn }) {
+           let index = rules.firstIndex(where: { $0.id == id }) {
+            guard rules[index].isEditable else { return false }
             rules[index].name = trimmedName
             rules[index].urlString = normalizedURL.absoluteString
             if selectedRuleID == id {
@@ -99,7 +225,8 @@ final class AppProxyStore: ObservableObject {
                     id: UUID().uuidString,
                     name: trimmedName,
                     urlString: normalizedURL.absoluteString,
-                    isBuiltIn: false
+                    source: .user,
+                    isEditable: true
                 )
             )
         }
@@ -109,25 +236,28 @@ final class AppProxyStore: ObservableObject {
     }
 
     func deleteUserRule(_ rule: AppProxyRule) {
-        guard !rule.isBuiltIn else { return }
+        guard rule.canDelete else { return }
         rules.removeAll { $0.id == rule.id }
         if selectedRuleID == rule.id {
-            select(.go2778)
+            select(.official)
         }
         persistRules()
     }
 
-    private static func loadRules() -> [AppProxyRule] {
+    private static func loadStoredRules() -> [StoredProxyRule] {
         guard let data = UserDefaults.standard.data(forKey: rulesKey) else { return [] }
-        return (try? JSONDecoder().decode([AppProxyRule].self, from: data))?.filter {
-            !$0.isBuiltIn &&
+        return (try? JSONDecoder().decode([StoredProxyRule].self, from: data))?.filter {
+            !$0.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
             !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
             AppProxyRule.validURL(from: $0.urlString) != nil
         } ?? []
     }
 
     private func persistRules() {
-        guard let data = try? JSONEncoder().encode(rules.filter { !$0.isBuiltIn }) else { return }
+        let storedRules = rules
+            .filter { $0.source == .user || ($0.source == .bundled && $0.isEditable) }
+            .map { StoredProxyRule(id: $0.id, name: $0.name, urlString: $0.urlString) }
+        guard let data = try? JSONEncoder().encode(storedRules) else { return }
         UserDefaults.standard.set(data, forKey: Self.rulesKey)
     }
 }

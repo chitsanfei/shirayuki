@@ -63,7 +63,7 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func beginEditingProxy(_ rule: AppProxyRule) {
-        guard !rule.isBuiltIn else { return }
+        guard rule.isEditable else { return }
         editingProxyID = rule.id
         proxyName = rule.name
         proxyURL = rule.urlString

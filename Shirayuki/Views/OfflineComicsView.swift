@@ -174,6 +174,7 @@ struct OfflineComicsView: View {
                 updatedAt: record.updatedAt,
                 chapters: chapters,
                 quality: quality,
+                allChapters: record.chapterCatalog,
                 progress: { value in
                     Task { @MainActor in
                         progress[record.id] = value
@@ -197,13 +198,12 @@ private struct OfflineReaderView: View {
     @StateObject private var viewModel: ReaderViewModel
 
     init(record: OfflineComicRecord) {
-        let chapters = record.chapters.map {
-            PicaChapter(uid: $0.id, title: $0.title, order: $0.order, id: $0.id)
-        }
+        let chapters = record.chapterCatalog
         _viewModel = StateObject(
             wrappedValue: ReaderViewModel(
                 comic: ComicDetail(offlineRecord: record),
                 initialChapters: chapters,
+                initialChapterId: record.chapters.first?.id,
                 offlineOnly: true
             )
         )

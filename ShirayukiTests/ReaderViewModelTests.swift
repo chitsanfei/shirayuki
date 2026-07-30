@@ -101,6 +101,35 @@ final class ReaderViewModelTests: XCTestCase {
         viewModel.consumeScrollTargetPage()
         XCTAssertNil(viewModel.scrollTargetPage)
     }
+    func testChapterDownloadStatePrioritizesActiveProgress() {
+        let progress = OfflineDownloadProgress(completedImages: 2, totalImages: 5)
+
+        XCTAssertEqual(
+            ReaderViewModel.chapterDownloadState(
+                chapterID: "chapter-1",
+                offlineChapterIDs: ["chapter-1"],
+                progress: progress
+            ),
+            .downloading(progress)
+        )
+        XCTAssertEqual(
+            ReaderViewModel.chapterDownloadState(
+                chapterID: "chapter-1",
+                offlineChapterIDs: ["chapter-1"],
+                progress: nil
+            ),
+            .downloaded
+        )
+        XCTAssertEqual(
+            ReaderViewModel.chapterDownloadState(
+                chapterID: "chapter-2",
+                offlineChapterIDs: ["chapter-1"],
+                progress: nil
+            ),
+            .notDownloaded
+        )
+    }
+
 }
 
 private func makeComic(id: String) throws -> ComicDetail {

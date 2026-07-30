@@ -15,6 +15,12 @@ enum ReadMode: String, CaseIterable, Identifiable {
     }
 }
 
+nonisolated enum ReaderChapterDownloadState: Equatable, Sendable {
+    case notDownloaded
+    case downloading(OfflineDownloadProgress)
+    case downloaded
+}
+
 @MainActor
 final class ReaderViewModel: ObservableViewModel {
     @Published var comic: ComicDetail
@@ -81,10 +87,29 @@ final class ReaderViewModel: ObservableViewModel {
     }
     @Published var scrollTargetPage: Int?
     @Published var offlineSourceMessage: String?
+    @Published private(set) var offlineChapterIDs = Set<String>()
+    @Published private(set) var chapterDownloadProgress: [String: OfflineDownloadProgress] = [:]
     
     var currentChapter: PicaChapter? {
         guard currentChapterIndex < chapters.count else { return nil }
         return chapters[currentChapterIndex]
+    }
+
+    nonisolated static func chapterDownloadState(
+        chapterID: String,
+        offlineChapterIDs: Set<String>,
+        progress: OfflineDownloadProgress?
+    ) -> ReaderChapterDownloadState {
+        if let progress { return .downloading(progress) }
+        return offlineChapterIDs.contains(chapterID) ? .downloaded : .notDownloaded
+    }
+
+    func chapterDownloadState(for chapter: PicaChapter) -> ReaderChapterDownloadState {
+        Self.chapterDownloadState(
+            chapterID: chapter.id,
+            offlineChapterIDs: offlineChapterIDs,
+            progress: chapterDownloadProgress[chapter.id]
+        )
     }
     
     var isFirstChapter: Bool { currentChapterIndex == 0 }
@@ -96,6 +121,7 @@ final class ReaderViewModel: ObservableViewModel {
     private var initialLoadTask: Task<Void, Never>?
     private var progressSaveTask: Task<Void, Never>?
     private var preloadTask: Task<Void, Never>?
+    private var chapterCatalogRefreshTask: Task<Void, Never>?
     private var scheduledAutomaticDownloadChapterIDs = Set<String>()
     private let initialChapters: [PicaChapter]
     private let initialChapterIndex: Int
@@ -132,6 +158,7 @@ final class ReaderViewModel: ObservableViewModel {
         initialLoadTask?.cancel()
         progressSaveTask?.cancel()
         preloadTask?.cancel()
+        chapterCatalogRefreshTask?.cancel()
     }
 
     func startInitialLoadIfNeeded() {
@@ -160,6 +187,8 @@ final class ReaderViewModel: ObservableViewModel {
         progressSaveTask = nil
         preloadTask?.cancel()
         preloadTask = nil
+        chapterCatalogRefreshTask?.cancel()
+        chapterCatalogRefreshTask = nil
         stopAutoTurn()
         isLoading = false
     }
@@ -168,15 +197,20 @@ final class ReaderViewModel: ObservableViewModel {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
-        
+
         do {
-            let loadedChapters = if initialChapters.isEmpty {
-                try await PicaAPIService.shared.fetchChapters(id: comic.id)
+            let loadedChapters: [PicaChapter]
+            if offlineOnly, !initialChapters.isEmpty {
+                loadedChapters = initialChapters
+                announceOfflineSource(.offline)
+            } else if initialChapters.isEmpty {
+                loadedChapters = try await PicaAPIService.shared.fetchChapters(id: comic.id)
             } else {
-                initialChapters
+                loadedChapters = initialChapters
             }
-            
+
             chapters = loadedChapters.sorted { $0.order < $1.order }
+            await refreshOfflineChapterIDs()
             if !chapters.isEmpty {
                 let startIndex = resolvedInitialChapterIndex(in: chapters)
                 _ = await loadChapter(
@@ -185,18 +219,27 @@ final class ReaderViewModel: ObservableViewModel {
                     shouldManageLoading: false
                 )
             }
+            if offlineOnly {
+                chapterCatalogRefreshTask?.cancel()
+                chapterCatalogRefreshTask = Task { @MainActor [weak self] in
+                    await self?.refreshOfflineChapterCatalog()
+                }
+            }
         } catch is CancellationError {
             errorMessage = nil
         } catch {
             if (offlineOnly || !AppReaderSettingsStore.shared.ignoresOfflineContent),
                let record = await OfflineComicStore.shared.record(for: comic.id),
-               !record.chapters.isEmpty {
-                chapters = record.chapters.map {
-                    PicaChapter(uid: $0.id, title: $0.title, order: $0.order, id: $0.id)
-                }.sorted { $0.order < $1.order }
+               !record.chapterCatalog.isEmpty {
+                chapters = record.chapterCatalog
+                offlineChapterIDs = Set(record.chapters.map(\.id))
                 announceOfflineSource(.offline)
                 let startIndex = resolvedInitialChapterIndex(in: chapters)
-                _ = await loadChapter(at: startIndex, startingPage: initialPageIndex, shouldManageLoading: false)
+                _ = await loadChapter(
+                    at: startIndex,
+                    startingPage: initialPageIndex,
+                    shouldManageLoading: false
+                )
             } else {
                 handleError(error)
             }
@@ -511,19 +554,72 @@ final class ReaderViewModel: ObservableViewModel {
               isLastPage,
               AppReaderSettingsStore.shared.downloadsWhileReading,
               let chapter = currentChapter,
+              !offlineChapterIDs.contains(chapter.id),
               scheduledAutomaticDownloadChapterIDs.insert(chapter.id).inserted else { return }
         let comic = comic
+        let allChapters = chapters
         let quality = AppImageQuality.stored
-        Task(priority: .utility) {
-            try? await OfflineComicStore.shared.download(
-                comicID: comic.id,
-                title: comic.title,
-                thumbURL: comic.thumb.url,
-                createdAt: comic.createdAt,
-                updatedAt: comic.updatedAt,
-                chapters: [chapter],
-                quality: quality
-            )
+        chapterDownloadProgress[chapter.id] = OfflineDownloadProgress(
+            completedImages: 0,
+            totalImages: 0
+        )
+        Task(priority: .utility) { [weak self] in
+            do {
+                try await OfflineComicStore.shared.download(
+                    comicID: comic.id,
+                    title: comic.title,
+                    thumbURL: comic.thumb.url,
+                    createdAt: comic.createdAt,
+                    updatedAt: comic.updatedAt,
+                    chapters: [chapter],
+                    quality: quality,
+                    allChapters: allChapters,
+                    progress: { progress in
+                        Task { @MainActor [weak self] in
+                            self?.chapterDownloadProgress[chapter.id] = progress
+                        }
+                    }
+                )
+                self?.finishAutomaticDownload(chapterID: chapter.id)
+            } catch {
+                self?.failAutomaticDownload(chapterID: chapter.id)
+            }
         }
+    }
+
+    private func refreshOfflineChapterCatalog() async {
+        do {
+            let loadedChapters = try await PicaAPIService.shared.fetchChapters(id: comic.id)
+                .sorted { $0.order < $1.order }
+            guard !Task.isCancelled, !loadedChapters.isEmpty else { return }
+            let currentChapterID = currentChapter?.id
+            try? await OfflineComicStore.shared.updateChapterCatalog(
+                comicID: comic.id,
+                chapters: loadedChapters
+            )
+            chapters = loadedChapters
+            if let currentChapterID,
+               let index = chapters.firstIndex(where: { $0.id == currentChapterID }) {
+                currentChapterIndex = index
+            }
+            await refreshOfflineChapterIDs()
+        } catch {
+            // Existing offline catalog remains usable when the network is unavailable.
+        }
+    }
+
+    private func refreshOfflineChapterIDs() async {
+        let record = await OfflineComicStore.shared.record(for: comic.id)
+        offlineChapterIDs = Set(record?.chapters.map(\.id) ?? [])
+    }
+
+    private func finishAutomaticDownload(chapterID: String) {
+        chapterDownloadProgress[chapterID] = nil
+        offlineChapterIDs.insert(chapterID)
+    }
+
+    private func failAutomaticDownload(chapterID: String) {
+        chapterDownloadProgress[chapterID] = nil
+        scheduledAutomaticDownloadChapterIDs.remove(chapterID)
     }
 }

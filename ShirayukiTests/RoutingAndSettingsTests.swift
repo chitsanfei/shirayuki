@@ -11,11 +11,8 @@ final class RoutingAndSettingsTests: XCTestCase {
         XCTAssertEqual(source.emptySubtitle, "恋爱 分类里还没有可显示的内容")
     }
 
-    func testAPIEndpointsExposeReadableDescriptions() {
-        XCTAssertEqual(APIEndpoint.picacomic.displayName, "Picacomic 官方")
-        XCTAssertFalse(APIEndpoint.picacomic.description.isEmpty)
-        XCTAssertEqual(APIEndpoint.go2778.displayName, "Go2778 代理")
-        XCTAssertFalse(APIEndpoint.go2778.description.isEmpty)
+    func testOfficialRouteUsesReadableName() {
+        XCTAssertEqual(AppProxyRule.official.displayName, "Picacomic 官方")
     }
 
     func testThirdPartyNoticesDescribeDesignReferences() {

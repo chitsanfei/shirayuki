@@ -69,7 +69,7 @@ struct LoginView: View {
                             proxyStore.select(rule)
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(rule.name)
+                                Text(rule.displayName)
                                 Text(rule.urlString)
                             }
                         }
@@ -83,7 +83,7 @@ struct LoginView: View {
                             Text(localization.text("auth.network"))
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(.secondary)
-                            Text(proxyStore.selectedRule.name)
+                            Text(proxyStore.selectedRule.displayName)
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundStyle(.primary)
                             Text(proxyStore.selectedRule.urlString)

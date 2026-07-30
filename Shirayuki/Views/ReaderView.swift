@@ -52,22 +52,13 @@ struct ReaderView: View {
                     onChapterTap: { showChapterSheet = true }
                 )
 
-                if let message = viewModel.offlineSourceMessage {
-                    VStack {
-                        Spacer()
-                        Text(message)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(.black.opacity(0.72), in: Capsule())
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                            .padding(.bottom, geometry.safeAreaInsets.bottom + 90)
-                    }
-                    .animation(.spring(response: 0.3), value: viewModel.offlineSourceMessage)
-                }
             }
             .ignoresSafeArea()
+            .glassToast(
+                message: viewModel.offlineSourceMessage,
+                systemImage: "internaldrive.fill",
+                bottomPadding: geometry.safeAreaInsets.bottom + 90
+            )
             #if os(iOS)
             .statusBar(hidden: !shouldShowTopToolbar)
             #endif
@@ -563,10 +554,13 @@ struct ChapterListSheet: View {
                             dismiss()
                         }
                     } label: {
-                        HStack {
+                        HStack(spacing: 10) {
                             Text(chapter.title)
                                 .foregroundStyle(viewModel.currentChapterIndex == index ? Color.accentColor : .primary)
                             Spacer()
+                            ReaderChapterDownloadIndicator(
+                                state: viewModel.chapterDownloadState(for: chapter)
+                            )
                             if viewModel.currentChapterIndex == index {
                                 Image(systemName: "checkmark")
                                     .foregroundStyle(Color.accentColor)
@@ -586,6 +580,46 @@ struct ChapterListSheet: View {
                 }
             }
         }
+    }
+}
+
+private struct ReaderChapterDownloadIndicator: View {
+    let state: ReaderChapterDownloadState
+
+    var body: some View {
+        Group {
+            switch state {
+            case .notDownloaded:
+                Image(systemName: "icloud.and.arrow.down")
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(AppLocalization.text("reader.chapter.onlineOnly"))
+            case .downloaded:
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(.green)
+                    .accessibilityLabel(AppLocalization.text("reader.chapter.downloaded"))
+            case .downloading(let progress):
+                ZStack {
+                    if let fraction = progress.fraction {
+                        Circle()
+                            .stroke(Color.orange.opacity(0.22), lineWidth: 2.5)
+                        Circle()
+                            .trim(from: 0, to: fraction)
+                            .stroke(.orange, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                    } else {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .tint(.orange)
+                    }
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.orange)
+                }
+                .frame(width: 22, height: 22)
+                .accessibilityLabel(AppLocalization.text("reader.chapter.downloading"))
+            }
+        }
+        .font(.system(size: 15, weight: .semibold))
     }
 }
 

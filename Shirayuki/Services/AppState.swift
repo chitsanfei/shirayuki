@@ -188,25 +188,3 @@ final class AppState: ObservableObject {
         }
     }
 }
-
-enum APIEndpoint: String, CaseIterable, Identifiable {
-    case picacomic = "https://picaapi.picacomic.com/"
-    case go2778 = "https://picaapi.go2778.com/"
-    
-    var id: String { rawValue }
-    var displayName: String {
-        switch self {
-        case .picacomic: return AppLocalization.text("endpoint.picacomic.name")
-        case .go2778: return AppLocalization.text("endpoint.go2778.name")
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .picacomic:
-            return AppLocalization.text("endpoint.picacomic.desc")
-        case .go2778:
-            return AppLocalization.text("endpoint.go2778.desc")
-        }
-    }
-}

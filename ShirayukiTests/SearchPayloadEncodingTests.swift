@@ -2,7 +2,6 @@ import Foundation
 import XCTest
 @testable import Shirayuki
 
-@MainActor
 final class SearchPayloadEncodingTests: XCTestCase {
     func testSearchPayloadEncodesOnlyKeywordAndSort() throws {
         let payload = SearchPayload(keyword: "猫", sort: .dd)
@@ -17,18 +16,16 @@ final class SearchPayloadEncodingTests: XCTestCase {
     }
 
     func testAscendingSearchMapsDateSortToAPIAscendingCode() {
-        let viewModel = SearchViewModel()
-        viewModel.sortMode = .dd
-        viewModel.sortAscending = true
-
-        XCTAssertEqual(viewModel.requestSortMode, .da)
+        XCTAssertEqual(
+            SearchViewModel.resolvedSortMode(sortMode: .dd, ascending: true),
+            .da
+        )
     }
 
     func testNonDateSearchSortRemainsStableWhenAscendingIsSelected() {
-        let viewModel = SearchViewModel()
-        viewModel.sortMode = .ld
-        viewModel.sortAscending = true
-
-        XCTAssertEqual(viewModel.requestSortMode, .ld)
+        XCTAssertEqual(
+            SearchViewModel.resolvedSortMode(sortMode: .ld, ascending: true),
+            .ld
+        )
     }
 }

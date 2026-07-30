@@ -16,6 +16,22 @@ nonisolated struct OfflineChapterRecord: Codable, Sendable, Identifiable {
     let images: [OfflineImageRecord]
 }
 
+nonisolated struct OfflineChapterMetadata: Codable, Sendable, Equatable {
+    let id: String
+    let title: String
+    let order: Int
+
+    init(_ chapter: PicaChapter) {
+        id = chapter.id
+        title = chapter.title
+        order = chapter.order
+    }
+
+    var chapter: PicaChapter {
+        PicaChapter(uid: id, title: title, order: order, id: id)
+    }
+}
+
 nonisolated struct OfflineComicRecord: Codable, Sendable, Identifiable {
     let id: String
     let title: String
@@ -24,7 +40,58 @@ nonisolated struct OfflineComicRecord: Codable, Sendable, Identifiable {
     let updatedAt: String
     let downloadedAt: Date
     let quality: AppImageQuality
+    let availableChapters: [OfflineChapterMetadata]
     let chapters: [OfflineChapterRecord]
+
+    init(
+        id: String,
+        title: String,
+        thumbURL: String,
+        createdAt: String,
+        updatedAt: String,
+        downloadedAt: Date,
+        quality: AppImageQuality,
+        availableChapters: [OfflineChapterMetadata]? = nil,
+        chapters: [OfflineChapterRecord]
+    ) {
+        self.id = id
+        self.title = title
+        self.thumbURL = thumbURL
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.downloadedAt = downloadedAt
+        self.quality = quality
+        self.availableChapters = availableChapters ?? chapters.map {
+            OfflineChapterMetadata(
+                PicaChapter(uid: $0.id, title: $0.title, order: $0.order, id: $0.id)
+            )
+        }
+        self.chapters = chapters
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        thumbURL = try container.decode(String.self, forKey: .thumbURL)
+        createdAt = try container.decode(String.self, forKey: .createdAt)
+        updatedAt = try container.decode(String.self, forKey: .updatedAt)
+        downloadedAt = try container.decode(Date.self, forKey: .downloadedAt)
+        quality = try container.decode(AppImageQuality.self, forKey: .quality)
+        chapters = try container.decode([OfflineChapterRecord].self, forKey: .chapters)
+        availableChapters = try container.decodeIfPresent(
+            [OfflineChapterMetadata].self,
+            forKey: .availableChapters
+        ) ?? chapters.map {
+            OfflineChapterMetadata(
+                PicaChapter(uid: $0.id, title: $0.title, order: $0.order, id: $0.id)
+            )
+        }
+    }
+
+    var chapterCatalog: [PicaChapter] {
+        availableChapters.map(\.chapter).sorted { $0.order < $1.order }
+    }
 
     var imageCount: Int {
         chapters.reduce(0) { $0 + $1.images.count }
@@ -35,9 +102,14 @@ nonisolated struct OfflineComicRecord: Codable, Sendable, Identifiable {
     }
 }
 
-nonisolated struct OfflineDownloadProgress: Sendable {
+nonisolated struct OfflineDownloadProgress: Sendable, Equatable {
     let completedImages: Int
     let totalImages: Int
+
+    var fraction: Double? {
+        guard totalImages > 0 else { return nil }
+        return min(max(Double(completedImages) / Double(totalImages), 0), 1)
+    }
 }
 
 nonisolated enum OfflineImageSource: Sendable, Equatable {
@@ -70,6 +142,22 @@ actor OfflineComicStore {
 
     func record(for comicID: String) -> OfflineComicRecord? {
         loadRecord(at: directory(for: comicID))
+    }
+
+    func updateChapterCatalog(comicID: String, chapters: [PicaChapter]) throws {
+        guard !chapters.isEmpty, let record = record(for: comicID) else { return }
+        let updatedRecord = OfflineComicRecord(
+            id: record.id,
+            title: record.title,
+            thumbURL: record.thumbURL,
+            createdAt: record.createdAt,
+            updatedAt: record.updatedAt,
+            downloadedAt: record.downloadedAt,
+            quality: record.quality,
+            availableChapters: chapters.map(OfflineChapterMetadata.init),
+            chapters: record.chapters
+        )
+        try persist(updatedRecord, in: directory(for: comicID))
     }
 
     func storageSize() -> Int {
@@ -129,6 +217,7 @@ actor OfflineComicStore {
         updatedAt: String,
         chapters: [PicaChapter],
         quality: AppImageQuality,
+        allChapters: [PicaChapter]? = nil,
         progress: (OfflineDownloadProgress) -> Void = { _ in }
     ) async throws {
         guard !chapters.isEmpty else { return }
@@ -137,6 +226,7 @@ actor OfflineComicStore {
         var didPersistChapter = false
         var completedImages = 0
         var totalImages = 0
+        let availableChapters = (allChapters ?? chapters).map(OfflineChapterMetadata.init)
         progress(OfflineDownloadProgress(completedImages: 0, totalImages: 0))
         try fileManager.createDirectory(at: finalDirectory, withIntermediateDirectories: true)
 
@@ -184,6 +274,7 @@ actor OfflineComicStore {
                         createdAt: createdAt,
                         updatedAt: updatedAt,
                         quality: quality,
+                        availableChapters: availableChapters,
                         directory: finalDirectory
                     )
                     didPersistChapter = true
@@ -213,6 +304,7 @@ actor OfflineComicStore {
         createdAt: String,
         updatedAt: String,
         quality: AppImageQuality,
+        availableChapters: [OfflineChapterMetadata],
         directory: URL
     ) throws {
         let existingRecord = loadRecord(at: directory)
@@ -232,12 +324,10 @@ actor OfflineComicStore {
             updatedAt: updatedAt,
             downloadedAt: Date(),
             quality: quality,
+            availableChapters: availableChapters,
             chapters: chapters.sorted { $0.order < $1.order }
         )
-        try JSONEncoder().encode(record).write(
-            to: directory.appendingPathComponent("metadata.json"),
-            options: .atomic
-        )
+        try persist(record, in: directory)
 
         if let previousChapter {
             let currentFileNames = Set(chapter.images.map(\.fileName))
@@ -245,6 +335,13 @@ actor OfflineComicStore {
                 try? fileManager.removeItem(at: directory.appendingPathComponent(image.fileName))
             }
         }
+    }
+
+    private func persist(_ record: OfflineComicRecord, in directory: URL) throws {
+        try JSONEncoder().encode(record).write(
+            to: directory.appendingPathComponent("metadata.json"),
+            options: .atomic
+        )
     }
 
     func delete(comicID: String) throws {

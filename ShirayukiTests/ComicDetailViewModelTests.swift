@@ -1,23 +1,33 @@
 import XCTest
 @testable import Shirayuki
 
-@MainActor
 final class ComicDetailViewModelTests: XCTestCase {
     func testOfflineChapterStateSupportsPartialComicDownloads() {
-        let viewModel = ComicDetailViewModel(comicId: "offline-state-comic")
         let chapters = [
             PicaChapter(uid: "uid-1", title: "第1话", order: 1, id: "chapter-1"),
             PicaChapter(uid: "uid-2", title: "第2话", order: 2, id: "chapter-2")
         ]
-        viewModel.chapters = chapters
-        viewModel.offlineRecord = makeRecord(chapters: [chapters[0]])
+        let partialIDs = ComicDetailViewModel.offlineChapterIDs(
+            in: makeRecord(chapters: [chapters[0]])
+        )
 
-        XCTAssertEqual(viewModel.offlineChapterIDs, ["chapter-1"])
-        XCTAssertFalse(viewModel.isFullyOffline)
+        XCTAssertEqual(partialIDs, ["chapter-1"])
+        XCTAssertFalse(
+            ComicDetailViewModel.isFullyOffline(
+                chapters: chapters,
+                offlineChapterIDs: partialIDs
+            )
+        )
 
-        viewModel.offlineRecord = makeRecord(chapters: chapters)
-
-        XCTAssertTrue(viewModel.isFullyOffline)
+        let completeIDs = ComicDetailViewModel.offlineChapterIDs(
+            in: makeRecord(chapters: chapters)
+        )
+        XCTAssertTrue(
+            ComicDetailViewModel.isFullyOffline(
+                chapters: chapters,
+                offlineChapterIDs: completeIDs
+            )
+        )
     }
 
     private func makeRecord(chapters: [PicaChapter]) -> OfflineComicRecord {

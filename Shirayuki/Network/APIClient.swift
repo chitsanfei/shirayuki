@@ -64,7 +64,7 @@ actor APIClient {
     private let secretKey = "~d}$Q7$eIni=V)9\\RK/P.RM4;9[7|@/CA}b~OW!3?EV`:<>M7pddUBL5n|0/*Cn"
     private let nonce = "4ce7a7aa759b40f794d189a88b84aba8"
     
-    private var baseURL: String = "https://picaapi.go2778.com/"
+    private var baseURL: String = "https://picaapi.picacomic.com/"
     private var token: String = ""
     private let session: URLSession
     // 401 去抖：多个并发请求同时收到 401 时，只在窗口内首次发送 unauthorized 通知，

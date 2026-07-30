@@ -37,7 +37,6 @@ struct ComicDetailView: View {
                     actionSection(comic: comic)
                     readProgressSection
                     chapterSection
-                    descriptionSection(comic: comic)
                     recommendationSection
                 }
                 .padding(.vertical, 16)
@@ -273,6 +272,22 @@ struct ComicDetailView: View {
                         text: comic.allowComment ? localization.text("detail.meta.comment.enabled") : localization.text("detail.meta.comment.disabled")
                     )
                 }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(localization.text("detail.section.description"), systemImage: "text.alignleft")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text(comic.description.isEmpty ? localization.text("detail.description.empty") : comic.description)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.secondary.opacity(0.08))
+                )
             }
             .padding(16)
             .background(
@@ -317,70 +332,60 @@ struct ComicDetailView: View {
     private func actionSection(comic: ComicDetail) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(localization.text("detail.section.actions"))
-            
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+
+            HStack(alignment: .top, spacing: 8) {
                 Button {
                     Task { await viewModel.toggleLike() }
                 } label: {
                     ActionButtonLabel(
-                        icon: viewModel.isLiked ? "heart.fill" : "heart",
+                        icon: .system(viewModel.isLiked ? "heart.fill" : "heart"),
                         title: viewModel.isLiked ? localization.text("detail.action.liked") : localization.text("detail.action.like"),
                         isFilled: viewModel.isLiked,
                         tint: .pink
                     )
                 }
                 .buttonStyle(.plain)
-                
+
                 Button {
                     Task { await viewModel.toggleFavorite() }
                 } label: {
                     ActionButtonLabel(
-                        icon: viewModel.isFavorited ? "star.fill" : "star",
+                        icon: .system(viewModel.isFavorited ? "star.fill" : "star"),
                         title: viewModel.isFavorited ? localization.text("detail.action.favorited") : localization.text("detail.action.favorite"),
                         isFilled: viewModel.isFavorited,
                         tint: .yellow
                     )
                 }
                 .buttonStyle(.plain)
-                
+
                 Button {
                     showDownloadOptions = true
                 } label: {
                     switch viewModel.downloadState {
                     case let .downloading(completedImages, totalImages):
-                        VStack(spacing: 7) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "arrow.down.circle.fill")
-                                if totalImages > 0 {
-                                    Text(localization.text("detail.download.progress", completedImages, totalImages))
-                                } else {
-                                    Text(localization.text("detail.download.preparing"))
-                                }
-                            }
-                            .font(.system(size: 14, weight: .semibold))
-                            if totalImages > 0 {
-                                ProgressView(value: Double(completedImages), total: Double(totalImages))
-                                    .tint(.orange)
-                            } else {
-                                ProgressView()
-                                    .tint(.orange)
-                            }
-                        }
-                        .foregroundStyle(.orange)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.orange.opacity(0.14))
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        ActionButtonLabel(
+                            icon: totalImages > 0
+                                ? .progress(Double(completedImages) / Double(totalImages))
+                                : .indeterminate,
+                            title: localization.text("detail.action.download"),
+                            isFilled: false,
+                            tint: .orange
+                        )
+                        .accessibilityValue(
+                            totalImages > 0
+                            ? localization.text("detail.download.progress", completedImages, totalImages)
+                            : localization.text("detail.download.preparing")
+                        )
                     case .completed where viewModel.isFullyOffline:
                         ActionButtonLabel(
-                            icon: "checkmark.circle.fill",
+                            icon: .system("checkmark.circle.fill"),
                             title: localization.text("detail.action.downloaded"),
                             isFilled: true,
                             tint: .orange
                         )
                     default:
                         ActionButtonLabel(
-                            icon: "arrow.down.circle.fill",
+                            icon: .system("arrow.down"),
                             title: localization.text("detail.action.download"),
                             isFilled: false,
                             tint: .orange
@@ -389,6 +394,7 @@ struct ComicDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!comic.allowDownload || isDownloading)
+                .opacity(comic.allowDownload ? 1 : 0.45)
 
                 Button {
                     if let progress = viewModel.readProgress {
@@ -401,22 +407,18 @@ struct ComicDetailView: View {
                         startReading(at: 0, pageIndex: 0)
                     }
                 } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "book.fill")
-                        Text(
-                            viewModel.readProgress != nil
+                    ActionButtonLabel(
+                        icon: .system("book.fill"),
+                        title: viewModel.readProgress != nil
                             ? localization.text("detail.action.continueReading")
-                            : localization.text("detail.action.startReading")
-                        )
-                    }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.accentColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            : localization.text("detail.action.startReading"),
+                        isFilled: true,
+                        tint: Color.accentColor
+                    )
                 }
                 .buttonStyle(.plain)
+                .disabled(viewModel.chapters.isEmpty)
+                .opacity(viewModel.chapters.isEmpty ? 0.45 : 1)
             }
             .padding(.horizontal, 16)
         }
@@ -566,16 +568,6 @@ struct ComicDetailView: View {
         }
     }
     
-    private func descriptionSection(comic: ComicDetail) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle(localization.text("detail.section.description"))
-            Text(comic.description.isEmpty ? localization.text("detail.description.empty") : comic.description)
-                .font(.system(size: 15))
-                .foregroundStyle(.secondary)
-                .lineSpacing(4)
-                .padding(.horizontal, 16)
-        }
-    }
     
     private var recommendationSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -634,9 +626,7 @@ struct ComicDetailView: View {
     }
 
     private func displayDate(_ rawValue: String) -> String {
-        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return "—" }
-        return String(value.prefix(10))
+        AppRelativeTime.string(from: rawValue, locale: localization.locale)
     }
     
     private func detailErrorState(message: String) -> some View {
@@ -721,22 +711,58 @@ private struct StatBlock: View {
     }
 }
 
+private enum ActionButtonIcon {
+    case system(String)
+    case progress(Double)
+    case indeterminate
+}
+
 private struct ActionButtonLabel: View {
-    let icon: String
+    let icon: ActionButtonIcon
     let title: String
     let isFilled: Bool
     let tint: Color
-    
+
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(isFilled ? Color.white.opacity(0.18) : tint.opacity(0.12))
+                    .frame(width: 42, height: 42)
+
+                switch icon {
+                case .system(let name):
+                    Image(systemName: name)
+                        .font(.system(size: 18, weight: .semibold))
+                case .progress(let rawProgress):
+                    Circle()
+                        .stroke(tint.opacity(0.2), lineWidth: 3)
+                        .frame(width: 34, height: 34)
+                    Circle()
+                        .trim(from: 0, to: min(max(rawProgress, 0), 1))
+                        .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 34, height: 34)
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 13, weight: .bold))
+                case .indeterminate:
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(isFilled ? .white : tint)
+                }
+            }
+
             Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.8)
         }
-        .font(.system(size: 15, weight: .semibold))
         .foregroundStyle(isFilled ? .white : tint)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(isFilled ? tint : tint.opacity(0.15))
+        .frame(maxWidth: .infinity, minHeight: 92)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 8)
+        .background(isFilled ? tint : tint.opacity(0.11))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

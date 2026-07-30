@@ -90,12 +90,23 @@ final class ComicDetailViewModel: ObservableViewModel {
         offlineRecord = await OfflineComicStore.shared.record(for: comicId)
     }
 
+    nonisolated static func offlineChapterIDs(in record: OfflineComicRecord?) -> Set<String> {
+        Set(record?.chapters.map(\.id) ?? [])
+    }
+
+    nonisolated static func isFullyOffline(
+        chapters: [PicaChapter],
+        offlineChapterIDs: Set<String>
+    ) -> Bool {
+        !chapters.isEmpty && chapters.allSatisfy { offlineChapterIDs.contains($0.id) }
+    }
+
     var offlineChapterIDs: Set<String> {
-        Set(offlineRecord?.chapters.map(\.id) ?? [])
+        Self.offlineChapterIDs(in: offlineRecord)
     }
 
     var isFullyOffline: Bool {
-        !chapters.isEmpty && chapters.allSatisfy { offlineChapterIDs.contains($0.id) }
+        Self.isFullyOffline(chapters: chapters, offlineChapterIDs: offlineChapterIDs)
     }
 
     func startDownload(quality: AppImageQuality, chapters selectedChapters: [PicaChapter]) {
@@ -108,6 +119,7 @@ final class ComicDetailViewModel: ObservableViewModel {
         let createdAt = comic.createdAt
         let updatedAt = comic.updatedAt
         let chapters = selectedChapters
+        let availableChapters = self.chapters
         downloadTask = Task(priority: .utility) { [weak self] in
             do {
                 try await OfflineComicStore.shared.download(
@@ -118,6 +130,7 @@ final class ComicDetailViewModel: ObservableViewModel {
                     updatedAt: updatedAt,
                     chapters: chapters,
                     quality: quality,
+                    allChapters: availableChapters,
                     progress: { progress in
                         Task { @MainActor [weak self] in
                             self?.downloadState = .downloading(

@@ -30,8 +30,11 @@ actor ImageLoader {
     }
 
     func loadImage(from urlString: String, quality: AppImageQuality) async throws -> Data? {
-        guard let url = URL(string: urlString) else { return nil }
-        let cacheKey = "\(quality.rawValue)|\(urlString)"
+        let resolvedURLString = await MainActor.run {
+            AppProxyStore.shared.selectedRule.imageURL(for: urlString)
+        }
+        guard let url = URL(string: resolvedURLString) else { return nil }
+        let cacheKey = "\(quality.rawValue)|\(resolvedURLString)"
         
         if let cached = memoryCache[cacheKey] {
             touchCache(for: cacheKey)
@@ -100,10 +103,7 @@ actor ImageLoader {
     }
     
     func preload(urls: [String]) {
-        let uniqueURLs = Array(Set(urls))
-        for urlString in uniqueURLs {
-            let cacheKey = "\(AppImageQuality.stored.rawValue)|\(urlString)"
-            guard memoryCache[cacheKey] == nil, ongoingTasks[cacheKey] == nil else { continue }
+        for urlString in Set(urls) {
             Task(priority: .utility) {
                 _ = try? await loadImage(from: urlString)
             }
