@@ -116,6 +116,7 @@ struct LoginView: View {
                         .foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("settingsButton")
                 
                 Button {
                     Task {

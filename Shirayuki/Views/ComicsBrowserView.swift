@@ -114,6 +114,7 @@ struct ComicsBrowserView: View {
     
     @StateObject private var viewModel: ComicsBrowserViewModel
     @ObservedObject private var localization = AppLocalization.shared
+    @EnvironmentObject private var navigation: AppNavigationCoordinator
     @State private var selectedComicId: String?
     
     init(source: ComicsBrowserSource) {
@@ -162,6 +163,12 @@ struct ComicsBrowserView: View {
         .task {
             guard viewModel.comics.isEmpty else { return }
             await viewModel.load(reset: true)
+        }
+        .agentPageContext(.tab("browser:\(source.id)"))
+        .onChange(of: navigation.pendingComicID) { _, _ in
+            guard navigation.currentContext == .tab("browser:\(source.id)"),
+                  let comicID = navigation.consumePendingComic() else { return }
+            selectedComicId = comicID
         }
     }
     

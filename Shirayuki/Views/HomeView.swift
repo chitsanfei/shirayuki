@@ -5,6 +5,7 @@ struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @ObservedObject private var localization = AppLocalization.shared
     @ObservedObject private var rankDisplay = AppRankDisplayStore.shared
+    @EnvironmentObject private var navigation: AppNavigationCoordinator
     @State private var selectedComicId: String?
 
     var body: some View {
@@ -32,6 +33,34 @@ struct HomeView: View {
                 await viewModel.loadHome()
             }
         }
+        .agentPageContext(.tab(AppTab.home.rawValue))
+        .onAppear {
+            routePendingReader()
+            consumeAgentComicRoute()
+        }
+        .onChange(of: navigation.pendingComicID) { _, _ in
+            consumeAgentComicRoute()
+        }
+        .onChange(of: navigation.pendingReaderRequest) { _, _ in
+            routePendingReader()
+        }
+        .onChange(of: navigation.currentContext) { _, context in
+            if context == .tab(AppTab.home.rawValue) {
+                routePendingReader()
+                consumeAgentComicRoute()
+            }
+        }
+    }
+
+    private func routePendingReader() {
+        guard let request = navigation.pendingReaderRequest else { return }
+        selectedComicId = request.comicID
+    }
+
+    private func consumeAgentComicRoute() {
+        guard navigation.currentContext == .tab(AppTab.home.rawValue),
+              let comicID = navigation.consumePendingComic() else { return }
+        selectedComicId = comicID
     }
 
     private var modeFilterSection: some View {

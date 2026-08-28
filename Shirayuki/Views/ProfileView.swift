@@ -312,6 +312,16 @@ struct SettingsSheet: View {
             Form {
                 Section {
                     NavigationLink {
+                        AgentSettingsView()
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "sparkles",
+                            title: localization.text("settings.agent"),
+                            subtitle: localization.text("settings.agent.subtitle")
+                        )
+                    }
+
+                    NavigationLink {
                         AppearanceSettingsView(viewModel: viewModel)
                     } label: {
                         SettingsCategoryRow(
@@ -392,6 +402,8 @@ struct SettingsSheet: View {
                 }
             }
         }
+        .accessibilityIdentifier("settingsSheet")
+        .agentSettingsSuppressed()
     }
 
 }

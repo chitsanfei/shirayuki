@@ -34,6 +34,20 @@
                ReferencedContainer = "container:Shirayuki.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "049E522E2F86B388009A55FA"
+               BuildableName = "ShirayukiUITests.xctest"
+               BlueprintName = "ShirayukiUITests"
+               ReferencedContainer = "container:Shirayuki.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -50,6 +64,17 @@
                BlueprintIdentifier = "049E52242F86B388009A55FA"
                BuildableName = "ShirayukiTests.xctest"
                BlueprintName = "ShirayukiTests"
+               ReferencedContainer = "container:Shirayuki.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "049E522E2F86B388009A55FA"
+               BuildableName = "ShirayukiUITests.xctest"
+               BlueprintName = "ShirayukiUITests"
                ReferencedContainer = "container:Shirayuki.xcodeproj">
             </BuildableReference>
          </TestableReference>

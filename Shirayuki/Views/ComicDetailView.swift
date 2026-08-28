@@ -16,6 +16,7 @@ struct ComicDetailView: View {
     
     @StateObject private var viewModel: ComicDetailViewModel
     @ObservedObject private var localization = AppLocalization.shared
+    @EnvironmentObject private var navigation: AppNavigationCoordinator
     @State private var readerPresentation: ReaderPresentation?
     @State private var routedComicId: String?
     @State private var showAllChapters = false
@@ -101,12 +102,39 @@ struct ComicDetailView: View {
             ) { quality, selectedChapters in
                 viewModel.startDownload(quality: quality, chapters: selectedChapters)
             }
+            .agentSurfaceHost(
+                context: .nonSettingsSheet(
+                    parent: .detail(comicID: comicId),
+                    kind: "downloadOptions"
+                )
+            )
         }
         .task(id: comicId) {
             await viewModel.loadDetail()
+            consumeAgentReaderRoute()
+        }
+        .agentPageContext(.detail(comicID: comicId))
+        .onChange(of: navigation.pendingComicID) { _, _ in
+            guard navigation.currentContext == .detail(comicID: comicId),
+                  let nextComicID = navigation.consumePendingComic() else { return }
+            routedComicId = nextComicID
+        }
+        .onChange(of: navigation.pendingReaderRequest) { _, _ in
+            consumeAgentReaderRoute()
         }
     }
     
+    private func consumeAgentReaderRoute() {
+        guard let request = navigation.pendingReaderRequest,
+              request.comicID == comicId,
+              !viewModel.chapters.isEmpty else { return }
+        _ = navigation.consumePendingReaderRequest()
+        let index = request.chapterID.flatMap { chapterID in
+            viewModel.chapters.firstIndex { $0.id == chapterID }
+        } ?? 0
+        startReading(at: index, pageIndex: max(0, request.pageIndex ?? 0))
+    }
+
     private func startReading(at chapterIndex: Int = 0, pageIndex: Int = 0) {
         let clampedIndex = min(max(chapterIndex, 0), max(0, viewModel.chapters.count - 1))
         let chapter = viewModel.chapters.indices.contains(clampedIndex) ? viewModel.chapters[clampedIndex] : nil
@@ -507,6 +535,7 @@ struct ComicDetailView: View {
                         Button(localization.text("common.reload")) {
                             Task {
                                 await viewModel.loadDetail()
+                                consumeAgentReaderRoute()
                             }
                         }
                         .buttonStyle(.borderedProminent)
@@ -725,7 +754,7 @@ private struct ActionButtonLabel: View {
     let tint: Color
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 4) {
             ZStack {
                 Circle()
                     .fill(isFilled ? Color.white.opacity(0.18) : tint.opacity(0.12))
@@ -760,9 +789,9 @@ private struct ActionButtonLabel: View {
                 .minimumScaleFactor(0.8)
         }
         .foregroundStyle(isFilled ? .white : tint)
-        .frame(maxWidth: .infinity, minHeight: 92)
-        .padding(.horizontal, 4)
-        .padding(.vertical, 8)
+        .padding(4)
+        .frame(maxWidth: .infinity)
+        .aspectRatio(1, contentMode: .fit)
         .background(isFilled ? tint : tint.opacity(0.11))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
@@ -788,7 +817,7 @@ private struct MetaChip: View {
     }
 }
 
-private struct DownloadOptionsSheet: View {
+struct DownloadOptionsSheet: View {
     let chapters: [PicaChapter]
     let downloadedChapterIDs: Set<String>
     let onConfirm: (AppImageQuality, [PicaChapter]) -> Void
@@ -931,5 +960,6 @@ private struct DownloadOptionsSheet: View {
                 }
             }
         }
+            .accessibilityIdentifier("downloadOptionsSheet")
     }
 }

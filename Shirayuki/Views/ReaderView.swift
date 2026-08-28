@@ -65,11 +65,18 @@ struct ReaderView: View {
             #endif
             .sheet(isPresented: $showChapterSheet) {
                 ChapterListSheet(viewModel: viewModel)
+                    .agentSurfaceHost(
+                        context: .nonSettingsSheet(parent: readerContext, kind: "chapterList")
+                    )
             }
             .sheet(isPresented: $showReaderSettings) {
                 ReaderSettingsSheet(viewModel: viewModel)
+                    .agentSurfaceHost(
+                        context: .nonSettingsSheet(parent: readerContext, kind: "readerSettings")
+                    )
             }
             .task {
+                AgentCommandService.shared.registerReaderSurface(viewModel)
                 viewModel.startInitialLoadIfNeeded()
             }
             .onChange(of: scenePhase) { _, phase in
@@ -83,9 +90,20 @@ struct ReaderView: View {
                 }
             }
             .onDisappear {
+                AgentCommandService.shared.unregisterReaderSurface(viewModel)
                 viewModel.cancelOngoingWork()
             }
+            .accessibilityIdentifier("readerSurface")
         }
+        .agentSurfaceHost(context: readerContext)
+    }
+
+    private var readerContext: AgentPageContext {
+        .reader(
+            comicID: viewModel.comic.id,
+            chapterID: viewModel.currentChapter?.id,
+            pageIndex: viewModel.currentPageIndex
+        )
     }
 
     @ViewBuilder
@@ -328,7 +346,7 @@ struct ZoomableComicImage: View {
             ComicAsyncImage(
                 url: url,
                 offlineComicID: comicID,
-        offlineChapterID: chapterID,
+                offlineChapterID: chapterID,
                 expectedOfflineImageCount: expectedImageCount,
                 forceOffline: forceOffline
             )
@@ -439,6 +457,7 @@ struct ReaderTopToolbar: View {
                     }
                     
                     ReaderToolbarIconButton(systemImage: "gearshape.fill", action: onSettings)
+                        .accessibilityIdentifier("readerSettingsButton")
                 }
             }
             .padding(.horizontal, 16)
@@ -508,6 +527,7 @@ struct ReaderBottomToolbar: View {
                             }
                             
                             ReaderToolbarIconButton(systemImage: "list.bullet", action: onChapterTap)
+                                .accessibilityIdentifier("readerChapterButton")
                             
                             ReaderToolbarIconButton(
                                 systemImage: viewModel.isAutoTurning ? "pause.fill" : "play.fill"
@@ -587,6 +607,7 @@ struct ChapterListSheet: View {
                 }
             }
         }
+            .accessibilityIdentifier("readerChapterSheet")
     }
 }
 
@@ -694,6 +715,7 @@ struct ReaderSettingsSheet: View {
                 }
             }
         }
+            .accessibilityIdentifier("readerSettingsSheet")
     }
 }
 

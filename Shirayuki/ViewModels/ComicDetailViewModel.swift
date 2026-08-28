@@ -25,6 +25,7 @@ final class ComicDetailViewModel: ObservableViewModel {
     
     let comicId: String
     private var downloadTask: Task<Void, Never>?
+    private var downloadJobID: String?
     
     init(comicId: String) {
         self.comicId = comicId
@@ -113,50 +114,59 @@ final class ComicDetailViewModel: ObservableViewModel {
 
     func startDownload(quality: AppImageQuality, chapters selectedChapters: [PicaChapter]) {
         guard let comic, !selectedChapters.isEmpty else { return }
+        if let previousJobID = downloadJobID {
+            Task {
+                try? await DownloadCoordinator.shared.cancel(jobID: previousJobID)
+            }
+        }
         downloadTask?.cancel()
         downloadState = .downloading(completedImages: 0, totalImages: 0)
-        let comicID = comic.id
-        let title = comic.title
-        let thumbURL = comic.thumb.url
-        let createdAt = comic.createdAt
-        let updatedAt = comic.updatedAt
-        let chapters = selectedChapters
-        let availableChapters = self.chapters
-        downloadTask = Task(priority: .utility) { [weak self] in
+
+        let request = DownloadRequest(
+            comicID: comic.id,
+            title: comic.title,
+            thumbURL: comic.thumb.url,
+            createdAt: comic.createdAt,
+            updatedAt: comic.updatedAt,
+            chapters: selectedChapters,
+            quality: quality,
+            allChapters: chapters,
+            allowDownload: comic.allowDownload
+        )
+        downloadTask = Task { @MainActor [weak self] in
             do {
-                try await OfflineComicStore.shared.download(
-                    comicID: comicID,
-                    title: title,
-                    thumbURL: thumbURL,
-                    createdAt: createdAt,
-                    updatedAt: updatedAt,
-                    chapters: chapters,
-                    quality: quality,
-                    allChapters: availableChapters,
-                    progress: { progress in
-                        Task { @MainActor [weak self] in
-                            self?.downloadState = .downloading(
-                                completedImages: progress.completedImages,
-                                totalImages: progress.totalImages
-                            )
-                            if progress.totalImages > 0,
-                               progress.completedImages == progress.totalImages {
-                                await self?.refreshOfflineRecord()
-                            }
-                        }
+                let jobID = try await DownloadCoordinator.shared.start(request: request)
+                guard let self else { return }
+                self.downloadJobID = jobID
+                let updates = await DownloadCoordinator.shared.updates(for: jobID)
+                for await snapshot in updates {
+                    guard !Task.isCancelled else { return }
+                    switch snapshot.state {
+                    case .queued, .downloading:
+                        self.downloadState = .downloading(
+                            completedImages: snapshot.completedImages,
+                            totalImages: snapshot.totalImages
+                        )
+                    case .completed:
+                        self.downloadState = .completed
+                        self.downloadJobID = nil
+                        await self.refreshOfflineRecord()
+                        return
+                    case .failed:
+                        self.downloadState = .failed(snapshot.errorMessage ?? "download_failed")
+                        self.downloadJobID = nil
+                        await self.refreshOfflineRecord()
+                        return
+                    case .cancelled:
+                        self.downloadJobID = nil
+                        return
                     }
-                )
-                guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    self?.downloadState = .completed
-                    Task { await self?.refreshOfflineRecord() }
                 }
             } catch is CancellationError {
             } catch {
-                await MainActor.run {
-                    self?.downloadState = .failed(error.localizedDescription)
-                    Task { await self?.refreshOfflineRecord() }
-                }
+                self?.downloadJobID = nil
+                self?.downloadState = .failed("download_failed")
+                await self?.refreshOfflineRecord()
             }
         }
     }

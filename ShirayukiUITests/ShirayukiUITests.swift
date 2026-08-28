@@ -1,38 +1,67 @@
 import XCTest
 
-/// Exercises critical application flows through the installed UI.
+/// Exercises the deterministic unauthenticated Agent and Settings surfaces.
 final class ShirayukiUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 
     @MainActor
-    func testBottomBarAppearsForLoggedInState() throws {
+    func testAgentButtonOpensConversationOnLaunch() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["UITEST_SKIP_WEB_LOAD", "UITEST_FORCE_LOGGED_IN"]
         app.launch()
 
-        XCTAssertTrue(app.otherElements["bottomBar"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.buttons["settingsButton"].exists)
-        XCTAssertTrue(app.buttons["searchFloatingButton"].exists)
+        let button = app.buttons["agentFloatingButton"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        button.tap()
+        XCTAssertTrue(app.otherElements["agentConversationPanel"].waitForExistence(timeout: 2))
     }
 
     @MainActor
-    func testReaderModeShowsExitButtonAndHidesBottomBar() throws {
+    func testSettingsSuppressesAgentButton() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["UITEST_SKIP_WEB_LOAD", "UITEST_FORCE_READER"]
         app.launch()
 
-        XCTAssertTrue(app.buttons["exitReaderButton"].waitForExistence(timeout: 2))
-        XCTAssertFalse(app.otherElements["bottomBar"].exists)
+        XCTAssertTrue(app.buttons["agentFloatingButton"].waitForExistence(timeout: 5))
+        let settings = app.buttons["settingsButton"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 2))
+        settings.tap()
+        XCTAssertTrue(app.otherElements["settingsSheet"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.buttons["agentFloatingButton"].exists)
     }
 
     @MainActor
-    func testStatusPlateAlwaysVisible() throws {
+    func testDebugAgentSurfaceFixturePresentsOneSurfaceAtATime() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["UITEST_SKIP_WEB_LOAD"]
+        app.launchArguments.append("--ui-test-agent-surfaces")
         app.launch()
 
-        XCTAssertTrue(app.otherElements["statusPlate"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["agentFloatingButton"].waitForExistence(timeout: 5))
+        for (buttonID, sheetID) in [
+            ("searchFiltersButton", "searchFiltersSheet"),
+            ("downloadOptionsButton", "downloadOptionsSheet"),
+            ("offlineDownloadButton", "offlineDownloadSheet")
+        ] {
+            let trigger = app.buttons[buttonID]
+            XCTAssertTrue(trigger.waitForExistence(timeout: 2))
+            trigger.tap()
+            XCTAssertTrue(app.otherElements[sheetID].waitForExistence(timeout: 2))
+            XCTAssertEqual(app.buttons.matching(identifier: "agentFloatingButton").count, 1)
+            app.swipeDown()
+            XCTAssertTrue(trigger.waitForExistence(timeout: 2))
+        }
+
+        app.buttons["readerFixtureButton"].tap()
+        XCTAssertTrue(app.otherElements["readerSurface"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(identifier: "agentFloatingButton").count, 1)
+
+        app.buttons["readerChapterButton"].tap()
+        XCTAssertTrue(app.otherElements["readerChapterSheet"].waitForExistence(timeout: 2))
+        XCTAssertEqual(app.buttons.matching(identifier: "agentFloatingButton").count, 1)
+        app.swipeDown()
+
+        app.buttons["readerSettingsButton"].tap()
+        XCTAssertTrue(app.otherElements["readerSettingsSheet"].waitForExistence(timeout: 2))
+        XCTAssertEqual(app.buttons.matching(identifier: "agentFloatingButton").count, 1)
     }
 }

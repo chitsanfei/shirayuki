@@ -126,7 +126,15 @@ final class SettingsViewModel: ObservableObject {
     }
     
     var appVersion: String {
-        "v\(AppMetadata.version)"
+        Self.displayVersion(in: .main)
+    }
+
+    nonisolated static func displayVersion(in bundle: Bundle) -> String {
+        guard let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              !version.isEmpty else {
+            return "v—"
+        }
+        return "v\(version)"
     }
     
     var sdkDisplay: String {

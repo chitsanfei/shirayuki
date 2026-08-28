@@ -4,6 +4,7 @@ import SwiftUI
 struct SearchView: View {
     @StateObject private var viewModel = SearchViewModel()
     @ObservedObject private var localization = AppLocalization.shared
+    @EnvironmentObject private var navigation: AppNavigationCoordinator
     @State private var selectedComicId: String?
     @State private var showFilters = false
     
@@ -35,11 +36,23 @@ struct SearchView: View {
             }
             .sheet(isPresented: $showFilters) {
                 SearchFiltersSheet(viewModel: viewModel)
+                    .agentSurfaceHost(
+                        context: .nonSettingsSheet(
+                            parent: .tab(AppTab.search.rawValue),
+                            kind: "searchFilters"
+                        )
+                    )
             }
             .task {
                 guard viewModel.hotKeywords.isEmpty else { return }
                 await viewModel.loadHotKeywords()
             }
+        }
+        .agentPageContext(.tab(AppTab.search.rawValue))
+        .onChange(of: navigation.pendingComicID) { _, _ in
+            guard navigation.currentContext == .tab(AppTab.search.rawValue),
+                  let comicID = navigation.consumePendingComic() else { return }
+            selectedComicId = comicID
         }
     }
     
@@ -293,5 +306,6 @@ struct SearchFiltersSheet: View {
                 }
             }
         }
+            .accessibilityIdentifier("searchFiltersSheet")
     }
 }

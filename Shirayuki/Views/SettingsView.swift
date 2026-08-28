@@ -526,6 +526,168 @@ struct AboutSettingsView: View {
     }
 }
 
+/// Configures the isolated OpenAI/OpenAI-compatible Agent transport.
+struct AgentSettingsView: View {
+    @ObservedObject private var store = LLMSettingsStore.shared
+    @ObservedObject private var localization = AppLocalization.shared
+    @State private var model = ""
+    @State private var baseURL = ""
+    @State private var apiKey = ""
+    @State private var modelMessage: String?
+    @State private var endpointMessage: String?
+    @State private var apiKeyMessage: String?
+    @State private var pendingCustomEndpoint = false
+    @State private var pendingCustomHost = ""
+
+    var body: some View {
+        Form {
+            Section(localization.text("settings.agent.provider")) {
+                Picker(
+                    localization.text("settings.agent.provider"),
+                    selection: Binding(
+                        get: { store.provider },
+                        set: {
+                            store.setProvider($0)
+                            baseURL = store.baseURLString
+                        }
+                    )
+                ) {
+                    Text(localization.text("settings.agent.provider.openAI"))
+                        .tag(LLMProvider.openAI)
+                    Text(localization.text("settings.agent.provider.openAICompatible"))
+                        .tag(LLMProvider.openAICompatible)
+                }
+
+                TextField(localization.text("settings.agent.model"), text: $model)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    #endif
+
+                Button(localization.text("common.apply")) {
+                    if !store.setModel(model) {
+                        modelMessage = localization.text("agent.state.configurationRequired")
+                    } else {
+                        modelMessage = nil
+                    }
+                }
+
+                if let modelMessage {
+                    Text(modelMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Section(localization.text("settings.agent.baseURL")) {
+                TextField(localization.text("settings.agent.baseURL"), text: $baseURL)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    #endif
+
+                Button(localization.text("common.apply")) {
+                    saveEndpoint()
+                }
+
+                if let endpointMessage {
+                    Text(endpointMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Section(localization.text("settings.agent.apiKey")) {
+                SecureField(localization.text("settings.agent.apiKey"), text: $apiKey)
+                    .textContentType(.password)
+
+                if store.hasAPIKey {
+                    Text(
+                        store.apiKeyLastFour.map {
+                            "\(localization.text("settings.agent.configured")) · ••••\($0)"
+                        } ?? localization.text("settings.agent.configured")
+                    )
+                    .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Button(localization.text("common.apply")) {
+                        if store.saveAPIKey(apiKey) {
+                            apiKey = ""
+                            apiKeyMessage = nil
+                        } else {
+                            apiKeyMessage = localization.text("agent.state.configurationRequired")
+                        }
+                    }
+                    Spacer()
+                    Button(localization.text("common.clear"), role: .destructive) {
+                        store.clearAPIKey()
+                        apiKey = ""
+                        apiKeyMessage = nil
+                    }
+                }
+
+                if let apiKeyMessage {
+                    Text(apiKeyMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Section {
+                Text(localization.text("settings.agent.customHostPrivacy"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle(localization.text("settings.agent"))
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .onAppear {
+            model = store.model
+            baseURL = store.baseURLString
+        }
+        .onDisappear {
+            apiKey = ""
+        }
+        .alert(
+            localization.text("settings.agent.confirmCustomHost"),
+            isPresented: $pendingCustomEndpoint
+        ) {
+            Button(localization.text("common.cancel"), role: .cancel) {}
+            Button(localization.text("settings.agent.confirmCustomHost")) {
+                if store.setBaseURL(baseURL, privacyConfirmed: true) {
+                    baseURL = store.baseURLString
+                    endpointMessage = nil
+                } else {
+                    endpointMessage = localization.text("settings.agent.httpsRequired")
+                }
+            }
+        } message: {
+            Text(
+                "\(localization.text("settings.agent.customHostPrivacy"))\n\n\(localization.text("settings.agent.customHost", pendingCustomHost))"
+            )
+        }
+    }
+
+    private func saveEndpoint() {
+        guard let endpoint = LLMSettingsStore.validEndpoint(baseURL) else {
+            endpointMessage = localization.text("settings.agent.httpsRequired")
+            return
+        }
+        if endpoint == LLMSettingsStore.defaultEndpoint {
+            _ = store.setBaseURL(baseURL)
+            baseURL = store.baseURLString
+            endpointMessage = nil
+        } else {
+            pendingCustomHost = endpoint.host ?? endpoint.absoluteString
+            pendingCustomEndpoint = true
+        }
+    }
+}
+
 private struct TextDocumentView: View {
     let title: String
     let text: String
