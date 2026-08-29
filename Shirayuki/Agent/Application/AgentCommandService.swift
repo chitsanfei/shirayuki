@@ -1,41 +1,6 @@
 import Foundation
+import Combine
 
-actor DefaultAgentUserProvider: AgentUserProvider {
-    func currentUser() async throws -> AgentUserSnapshot {
-        AgentRedactor.user(try await PicaAPIService.shared.fetchUserProfile())
-    }
-}
-
-actor DefaultAgentLibraryProvider: AgentLibraryProvider {
-    func favoritePage(page: Int, sort: ComicSortType) async throws -> [AgentFavoriteItem] {
-        guard (1...100).contains(page) else { throw AgentCommandError.invalidPage }
-        let result = try await PicaAPIService.shared.fetchFavoriteComics(page: page, sort: sort)
-        return result.docs.map(AgentFavoriteItem.init)
-    }
-
-    func offlineLibrary() async -> AgentOfflineLibrarySnapshot {
-        let records = await OfflineComicStore.shared.allComics()
-        return AgentOfflineLibrarySnapshot(
-            items: Array(records.prefix(AgentOfflineLibrarySnapshot.defaultItemLimit).map(AgentLibraryItem.init)),
-            totalCount: records.count,
-            storageBytes: await OfflineComicStore.shared.storageSize()
-        )
-    }
-}
-
-actor DefaultAgentDownloadProvider: AgentDownloadProvider {
-    func activeDownloads() async -> [AgentDownloadSnapshot] {
-        await DownloadCoordinator.shared.activeSnapshots()
-    }
-
-    func snapshot(jobID: String) async throws -> AgentDownloadSnapshot {
-        do {
-            return try await DownloadCoordinator.shared.snapshot(jobID: jobID)
-        } catch {
-            throw AgentCommandError.invalidIdentifier
-        }
-    }
-}
 
 struct AgentPageCapabilityRegistry {
     private struct PendingCapability {
@@ -86,46 +51,92 @@ struct AgentPageCapabilityRegistry {
 /// Executes only typed, redacted Agent commands and keeps provider reads on demand.
 @MainActor
 final class AgentCommandService {
-    static let shared = AgentCommandService()
+
+    private struct SessionState {
+        var knownComicIDs = Set<String>()
+        var localComicIDs = Set<String>()
+        var knownChapterIDs: [String: Set<String>] = [:]
+        var capabilityRegistry = AgentPageCapabilityRegistry()
+        var confirmedResults: [String: AgentCommandResult] = [:]
+    }
 
     private let navigation: AppNavigationCoordinator
     private let userProvider: any AgentUserProvider
     private let libraryProvider: any AgentLibraryProvider
     private let downloadProvider: any AgentDownloadProvider
+    private let blockedWords: UserDefaultsBlockedWordRepository
+    private let pageContent: AgentPageContentStore
     private let chapterProvider: (String) async throws -> [PicaChapter]
     private let comicDetailProvider: (String) async throws -> ComicDetail
     private weak var readerSurface: (any AgentReaderSurface)?
-    private var knownComicIDs = Set<String>()
-    private var knownChapterIDs: [String: Set<String>] = [:]
-    private var capabilityRegistry = AgentPageCapabilityRegistry()
-    private var confirmedResults: [String: AgentCommandResult] = [:]
+    private var activeSessionID = UUID()
+    private var states: [UUID: SessionState] = [:]
+    private var cancellables = Set<AnyCancellable>()
     private let sessionIsLoggedIn: () -> Bool
+    private let llmConfiguration: () -> LLMConfiguration?
+    private let llmHasAPIKey: () -> Bool
+
+    private var knownComicIDs: Set<String> {
+        get { states[activeSessionID, default: SessionState()].knownComicIDs }
+        set { states[activeSessionID, default: SessionState()].knownComicIDs = newValue }
+    }
+    private var localComicIDs: Set<String> {
+        get { states[activeSessionID, default: SessionState()].localComicIDs }
+        set { states[activeSessionID, default: SessionState()].localComicIDs = newValue }
+    }
+    private var knownChapterIDs: [String: Set<String>] {
+        get { states[activeSessionID, default: SessionState()].knownChapterIDs }
+        set { states[activeSessionID, default: SessionState()].knownChapterIDs = newValue }
+    }
+    private var capabilityRegistry: AgentPageCapabilityRegistry {
+        get { states[activeSessionID, default: SessionState()].capabilityRegistry }
+        set { states[activeSessionID, default: SessionState()].capabilityRegistry = newValue }
+    }
+    private var confirmedResults: [String: AgentCommandResult] {
+        get { states[activeSessionID, default: SessionState()].confirmedResults }
+        set { states[activeSessionID, default: SessionState()].confirmedResults = newValue }
+    }
 
     init(
         navigation: AppNavigationCoordinator? = nil,
         userProvider: any AgentUserProvider = DefaultAgentUserProvider(),
-        libraryProvider: any AgentLibraryProvider = DefaultAgentLibraryProvider(),
+        libraryProvider: (any AgentLibraryProvider)? = nil,
         downloadProvider: any AgentDownloadProvider = DefaultAgentDownloadProvider(),
-        sessionIsLoggedIn: (() -> Bool)? = nil,
+        blockedWords: UserDefaultsBlockedWordRepository? = nil,
+        pageContent: AgentPageContentStore? = nil,
+        sessionIsLoggedIn: @escaping () -> Bool,
+        llmConfiguration: @escaping () -> LLMConfiguration? = { nil },
+        llmHasAPIKey: @escaping () -> Bool = { false },
         chapterProvider: ((String) async throws -> [PicaChapter])? = nil,
         comicDetailProvider: ((String) async throws -> ComicDetail)? = nil
     ) {
+        let blockedWords = blockedWords ?? UserDefaultsBlockedWordRepository()
         self.navigation = navigation ?? AppNavigationCoordinator.shared
         self.userProvider = userProvider
-        self.libraryProvider = libraryProvider
+        self.libraryProvider = libraryProvider ?? DefaultAgentLibraryProvider(blockedWords: blockedWords)
         self.downloadProvider = downloadProvider
+        self.blockedWords = blockedWords
+        self.pageContent = pageContent ?? AgentPageContentStore()
         self.chapterProvider = chapterProvider ?? { id in
             try await PicaAPIService.shared.fetchChapters(id: id)
         }
         self.comicDetailProvider = comicDetailProvider ?? { id in
             try await PicaAPIService.shared.fetchComicDetail(id: id)
         }
-        self.sessionIsLoggedIn = sessionIsLoggedIn ?? { AppState.shared.isLoggedIn }
+        self.sessionIsLoggedIn = sessionIsLoggedIn
+        self.llmConfiguration = llmConfiguration
+        self.llmHasAPIKey = llmHasAPIKey
+        blockedWords.$currentSnapshot.dropFirst().sink { [weak self] _ in
+            guard let self else { return }
+            for id in self.states.keys {
+                self.states[id]?.knownComicIDs.removeAll()
+                self.states[id]?.knownChapterIDs.removeAll()
+            }
+        }.store(in: &cancellables)
     }
 
     func registerReaderSurface(_ surface: any AgentReaderSurface) {
         readerSurface = surface
-        knownComicIDs.insert(surface.agentReaderSnapshot.comicID)
     }
 
     func unregisterReaderSurface(_ surface: any AgentReaderSurface) {
@@ -133,8 +144,9 @@ final class AgentCommandService {
         readerSurface = nil
     }
 
-    /// Called by the UI only after the user confirms current-page sharing for this turn.
-    func issuePageCapability(turnID: String) -> AgentPageCapability? {
+    /// Called only after the user confirms current-page sharing for this turn.
+    func issuePageCapability(sessionID: UUID, turnID: String) -> AgentPageCapability? {
+        activeSessionID = sessionID
         guard let reader = readerSurface else { return nil }
         let snapshot = reader.agentReaderSnapshot
         guard snapshot.pageContentAvailable,
@@ -154,12 +166,15 @@ final class AgentCommandService {
         return capability
     }
     private var currentProviderKey: String {
-        guard let configuration = LLMSettingsStore.shared.configuration else { return "unconfigured" }
+        guard let configuration = llmConfiguration() else { return "unconfigured" }
         return "\(configuration.provider.rawValue)|\(configuration.baseURL.host?.lowercased() ?? "")|\(configuration.baseURL.port ?? 443)"
     }
  
     func currentPageConfirmationPreview() -> AgentConfirmationPreview? {
-        guard let configuration = LLMSettingsStore.shared.configuration,
+        guard let reader = readerSurface,
+              reader.agentReaderSnapshot.pageContentAvailable,
+              reader.agentReaderSnapshot.chapterID != nil,
+              let configuration = llmConfiguration(),
               let host = configuration.baseURL.host,
               !host.isEmpty else {
             return nil
@@ -176,10 +191,12 @@ final class AgentCommandService {
 
     func execute(
         _ command: AgentCommand,
+        sessionID: UUID,
         capability: AgentPageCapability? = nil,
         confirmed: Bool = false,
         turnID: String? = nil
     ) async -> AgentCommandResult {
+        activeSessionID = sessionID
         if let commandID = commandID(for: command), let previous = confirmedResults[commandID] {
             return previous
         }
@@ -210,7 +227,7 @@ final class AgentCommandService {
         case .offlineLibrary:
             let library = await libraryProvider.offlineLibrary()
             let items = library.limitedItems
-            items.forEach { knownComicIDs.insert($0.comicID) }
+            items.forEach { localComicIDs.insert($0.comicID) }
             result = .offlineLibrary(
                 items: items,
                 totalCount: library.totalCount,
@@ -234,14 +251,18 @@ final class AgentCommandService {
             guard !trimmed.isEmpty, trimmed.count <= 100 else { result = .failure(.invalidIdentifier); break }
             do {
                 let response = try await PicaAPIService.shared.searchComics(keyword: trimmed, page: 1, sort: sort)
-                response.docs.forEach { knownComicIDs.insert($0.id) }
-                result = .search(response.docs.map(AgentSearchItem.init))
+                let items = PicaAgentAdapters.searchItems(
+                    response.docs,
+                    snapshot: await blockedWords.snapshot()
+                )
+                items.forEach { knownComicIDs.insert($0.comicID) }
+                result = .search(items)
             } catch {
                 result = .failure(.providerFailure)
             }
         case let .openComic(comicID):
             guard sessionIsLoggedIn() else { result = .loginRequired; break }
-            guard knownComicIDs.contains(comicID) || currentComicID == comicID else {
+            guard isAuthorizedComicID(comicID) else {
                 result = .failure(.invalidIdentifier)
                 break
             }
@@ -249,7 +270,7 @@ final class AgentCommandService {
             result = .openedComic(comicID: comicID)
         case let .startReading(comicID, chapterID, pageIndex):
             guard sessionIsLoggedIn() else { result = .loginRequired; break }
-            guard knownComicIDs.contains(comicID) || currentComicID == comicID else {
+            guard isAuthorizedComicID(comicID) else {
                 result = .failure(.invalidIdentifier)
                 break
             }
@@ -290,8 +311,7 @@ final class AgentCommandService {
             result = .readerUpdated(reader.agentReaderSnapshot)
         case .currentPageContent:
             guard sessionIsLoggedIn() else { result = .loginRequired; break }
-            guard LLMSettingsStore.shared.configuration != nil,
-                  LLMSettingsStore.shared.hasAPIKey else {
+            guard llmConfiguration() != nil, llmHasAPIKey() else {
                 result = .configurationRequired
                 break
             }
@@ -319,9 +339,9 @@ final class AgentCommandService {
             } catch {
                 result = .failure(.pageImageUnavailable)
             }
-        case let .startDownload(comicID, chapterIDs, quality):
+        case let .startDownload(comicID, chapterIDs, quality, _):
             guard sessionIsLoggedIn() else { result = .loginRequired; break }
-            guard knownComicIDs.contains(comicID) || currentComicID == comicID else {
+            guard isAuthorizedComicID(comicID) else {
                 result = .failure(.invalidIdentifier)
                 break
             }
@@ -351,9 +371,16 @@ final class AgentCommandService {
             result = await applyDesiredLike(comicID: comicID, desired: isLiked, commandID: commandID, confirmed: confirmed)
         case let .setFavorited(comicID, isFavorited, commandID):
             result = await applyDesiredFavorite(comicID: comicID, desired: isFavorited, commandID: commandID, confirmed: confirmed)
+        case .listBlockedWords:
+            result = .blockedWords(snapshot: await blockedWords.snapshot(), operation: nil)
+        case let .addBlockedWord(word, _):
+            result = await mutateBlockedWordAdd(word: word, confirmed: confirmed)
+        case let .updateBlockedWord(oldWord, newWord, _):
+            result = await mutateBlockedWordUpdate(oldWord: oldWord, newWord: newWord, confirmed: confirmed)
+        case let .removeBlockedWord(word, _):
+            result = await mutateBlockedWordRemove(word: word, confirmed: confirmed)
         }
-
-        if let commandID = commandID(for: command), confirmed {
+        if let commandID = commandID(for: command), confirmed, isSuccessfulSideEffect(result) {
             confirmedResults[commandID] = result
             if confirmedResults.count > 256, let first = confirmedResults.keys.first {
                 confirmedResults.removeValue(forKey: first)
@@ -364,6 +391,8 @@ final class AgentCommandService {
 
     private func baseSnapshot() -> AgentBaseSnapshot {
         let context = navigation.currentContext
+        let content = pageContent.snapshot
+        content.comicIDs.forEach { knownComicIDs.insert($0) }
         let page = AgentPageSnapshot(
             kind: Self.pageKind(for: context),
             title: Self.pageTitle(for: context),
@@ -373,7 +402,8 @@ final class AgentCommandService {
         return AgentBaseSnapshot(
             isLoggedIn: sessionIsLoggedIn(),
             page: page,
-            reader: readerSurface?.agentReaderSnapshot
+            reader: readerSurface?.agentReaderSnapshot,
+            pageContent: content
         )
     }
 
@@ -501,7 +531,7 @@ final class AgentCommandService {
 
     private func applyDesiredLike(comicID: String, desired: Bool, commandID: String, confirmed: Bool) async -> AgentCommandResult {
         guard sessionIsLoggedIn() else { return .loginRequired }
-        guard knownComicIDs.contains(comicID) || currentComicID == comicID else { return .failure(.invalidIdentifier) }
+        guard isAuthorizedComicID(comicID) else { return .failure(.invalidIdentifier) }
         guard confirmed else {
             return await desiredStateConfirmation(comicID: comicID, action: .liked, desired: desired)
         }
@@ -516,7 +546,7 @@ final class AgentCommandService {
 
     private func applyDesiredFavorite(comicID: String, desired: Bool, commandID: String, confirmed: Bool) async -> AgentCommandResult {
         guard sessionIsLoggedIn() else { return .loginRequired }
-        guard knownComicIDs.contains(comicID) || currentComicID == comicID else { return .failure(.invalidIdentifier) }
+        guard isAuthorizedComicID(comicID) else { return .failure(.invalidIdentifier) }
         guard confirmed else {
             return await desiredStateConfirmation(comicID: comicID, action: .favorited, desired: desired)
         }
@@ -529,10 +559,137 @@ final class AgentCommandService {
         } catch { return .failure(.providerFailure) }
     }
 
+    private func mutateBlockedWordAdd(word: String, confirmed: Bool) async -> AgentCommandResult {
+        do {
+            let rule = try BlockedWordCanonicalizer.rule(from: word)
+            if blockedWords.confirmationRequired && !confirmed {
+                return .requiresConfirmation(.blockedWordAdd(
+                    displayValue: rule.displayValue,
+                    normalizedKey: rule.normalizedKey
+                ))
+            }
+            return blockedWordResult(
+                try await blockedWords.add(display: rule.displayValue),
+                operation: "add"
+            )
+        } catch let error as BlockedWordValidationError {
+            return .failure(.blockedWord(error))
+        } catch {
+            return .failure(.providerFailure)
+        }
+    }
+
+    private func mutateBlockedWordUpdate(
+        oldWord: String,
+        newWord: String,
+        confirmed: Bool
+    ) async -> AgentCommandResult {
+        do {
+            let oldRule = try BlockedWordCanonicalizer.rule(from: oldWord)
+            let newRule = try BlockedWordCanonicalizer.rule(from: newWord)
+            let snapshot = await blockedWords.snapshot()
+            guard let existing = snapshot.rules.first(where: {
+                $0.normalizedKey == oldRule.normalizedKey
+            }) else {
+                throw BlockedWordValidationError.notFound
+            }
+            if blockedWords.confirmationRequired && !confirmed {
+                return .requiresConfirmation(.blockedWordUpdate(
+                    oldDisplayValue: existing.displayValue,
+                    oldNormalizedKey: existing.normalizedKey,
+                    newDisplayValue: newRule.displayValue,
+                    newNormalizedKey: newRule.normalizedKey
+                ))
+            }
+            return blockedWordResult(
+                try await blockedWords.update(
+                    normalizedOld: existing.normalizedKey,
+                    newDisplay: newRule.displayValue
+                ),
+                operation: "update"
+            )
+        } catch let error as BlockedWordValidationError {
+            return .failure(.blockedWord(error))
+        } catch {
+            return .failure(.providerFailure)
+        }
+    }
+
+    private func mutateBlockedWordRemove(word: String, confirmed: Bool) async -> AgentCommandResult {
+        do {
+            let rule = try BlockedWordCanonicalizer.rule(from: word)
+            let snapshot = await blockedWords.snapshot()
+            guard let existing = snapshot.rules.first(where: {
+                $0.normalizedKey == rule.normalizedKey
+            }) else {
+                throw BlockedWordValidationError.notFound
+            }
+            if blockedWords.confirmationRequired && !confirmed {
+                return .requiresConfirmation(.blockedWordRemove(
+                    displayValue: existing.displayValue,
+                    normalizedKey: existing.normalizedKey
+                ))
+            }
+            return blockedWordResult(
+                try await blockedWords.remove(normalizedKey: existing.normalizedKey),
+                operation: "remove"
+            )
+        } catch let error as BlockedWordValidationError {
+            return .failure(.blockedWord(error))
+        } catch {
+            return .failure(.providerFailure)
+        }
+    }
+
+    private func blockedWordResult(
+        _ write: BlockedWordWriteResult,
+        operation name: String
+    ) -> AgentCommandResult {
+        let state: String
+        switch write {
+        case .changed: state = "\(name)_changed"
+        case let .unchanged(reason, _): state = "\(name)_unchanged_\(reason.rawValue)"
+        }
+        return .blockedWords(snapshot: write.snapshot, operation: state)
+    }
+
+    private func isAuthorizedComicID(_ comicID: String) -> Bool {
+        knownComicIDs.contains(comicID)
+            || localComicIDs.contains(comicID)
+            || currentComicID == comicID
+    }
+
+    private func isSuccessfulSideEffect(_ result: AgentCommandResult) -> Bool {
+        switch result {
+        case .queuedDownload, .cancelledDownload, .desiredStateApplied, .blockedWords:
+            true
+        default:
+            false
+        }
+    }
+
+    func clearSession(_ sessionID: UUID) {
+        states.removeValue(forKey: sessionID)
+        if activeSessionID == sessionID { activeSessionID = UUID() }
+    }
+
+    func clearAllAuthorization() {
+        states.removeAll()
+        activeSessionID = UUID()
+    }
+
     private func commandID(for command: AgentCommand) -> String? {
         switch command {
-        case let .cancelDownload(_, commandID), let .setLiked(_, _, commandID), let .setFavorited(_, _, commandID): return commandID
-        default: return nil
+        case let .startDownload(_, _, _, commandID),
+             let .cancelDownload(_, commandID),
+             let .setLiked(_, _, commandID),
+             let .setFavorited(_, _, commandID),
+             let .addBlockedWord(_, commandID),
+             let .updateBlockedWord(_, _, commandID),
+             let .removeBlockedWord(_, commandID):
+            commandID
+        default:
+            nil
         }
     }
 

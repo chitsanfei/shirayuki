@@ -51,6 +51,8 @@ final class ComicsBrowserViewModel: ObservableViewModel {
     @Published var errorMessage: String?
     @Published var currentPage = 1
     @Published var totalPages = 1
+    @Published private(set) var lastLoadedPageIDs: [String] = []
+    @Published private(set) var lastEvaluatedBlockedRevision: UInt64 = 0
     
     let source: ComicsBrowserSource
     
@@ -92,6 +94,7 @@ final class ComicsBrowserViewModel: ObservableViewModel {
             } else {
                 comics.append(contentsOf: result.docs)
             }
+            lastLoadedPageIDs = result.docs.map(\.id)
             
             currentPage = result.page
             totalPages = result.pages
@@ -100,50 +103,76 @@ final class ComicsBrowserViewModel: ObservableViewModel {
         }
     }
 
-    func loadNextPageIfNeeded(current comic: ComicSummary) async {
-        guard comic.id == comics.last?.id else { return }
+    func loadNextPage() async {
         guard !isLoading, currentPage < totalPages else { return }
         currentPage += 1
         await load()
+    }
+
+    func visibleComics(for snapshot: BlockedWordSnapshot) -> [ComicSummary] {
+        PicaAgentAdapters.visibleComics(comics, snapshot: snapshot)
+    }
+
+    func shouldLoadFilteredPage(for snapshot: BlockedWordSnapshot) -> Bool {
+        guard !isLoading, currentPage < totalPages else { return false }
+        let latestIDs = Set(lastLoadedPageIDs)
+        let latest = comics.filter { latestIDs.contains($0.id) }
+        return !latest.isEmpty && PicaAgentAdapters.visibleComics(latest, snapshot: snapshot).isEmpty
+    }
+
+    func resultsHiddenAtTerminal(for snapshot: BlockedWordSnapshot) -> Bool {
+        !comics.isEmpty && currentPage >= totalPages && visibleComics(for: snapshot).isEmpty
+    }
+
+    func recordBlockedRevision(_ revision: UInt64) {
+        lastEvaluatedBlockedRevision = revision
     }
 }
 
 /// Shared list screen for categories and account favorites.
 struct ComicsBrowserView: View {
     let source: ComicsBrowserSource
-    
+
     @StateObject private var viewModel: ComicsBrowserViewModel
     @ObservedObject private var localization = AppLocalization.shared
     @EnvironmentObject private var navigation: AppNavigationCoordinator
+    @EnvironmentObject private var blockedWords: UserDefaultsBlockedWordRepository
+    @EnvironmentObject private var agentPageContent: AgentPageContentStore
+    @State private var pageContentOwnerID = UUID()
     @State private var selectedComicId: String?
-    
+
     init(source: ComicsBrowserSource) {
         self.source = source
         _viewModel = StateObject(wrappedValue: ComicsBrowserViewModel(source: source))
     }
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if let errorMessage = viewModel.errorMessage, viewModel.comics.isEmpty, !viewModel.isLoading {
+                if let errorMessage = viewModel.errorMessage, visibleComics.isEmpty, !viewModel.isLoading {
                     contentErrorState(message: errorMessage)
                 } else if viewModel.comics.isEmpty, viewModel.isLoading {
                     ComicSelectionGridSkeleton()
-                } else if viewModel.comics.isEmpty {
-                    contentEmptyState
+                } else if visibleComics.isEmpty {
+                    contentEmptyState(
+                        hiddenByFilter: viewModel.resultsHiddenAtTerminal(for: blockedWords.currentSnapshot)
+                    )
                 } else {
-                    ComicSelectionGrid(viewModel.comics, id: \.id) { comic in
+                    ComicSelectionGrid(visibleComics, id: \.id) { comic in
                         ComicCard(comic: comic)
                             .contentShape(Rectangle())
-                            .onTapGesture {
-                                selectedComicId = comic.id
-                            }
+                            .onTapGesture { selectedComicId = comic.id }
                             .onAppear {
-                                Task {
-                                    await viewModel.loadNextPageIfNeeded(current: comic)
-                                }
+                                guard comic.id == visibleComics.last?.id else { return }
+                                Task { await viewModel.loadNextPage() }
                             }
                     }
+                }
+
+                if viewModel.shouldLoadFilteredPage(for: blockedWords.currentSnapshot) {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .onAppear { Task { await viewModel.loadNextPage() } }
                 }
             }
             .padding(.horizontal, 16)
@@ -157,36 +186,69 @@ struct ComicsBrowserView: View {
         .navigationDestination(item: $selectedComicId) { comicId in
             ComicDetailView(comicId: comicId)
         }
-        .refreshable {
-            await viewModel.load(reset: true)
-        }
+        .refreshable { await viewModel.load(reset: true) }
         .task {
             guard viewModel.comics.isEmpty else { return }
             await viewModel.load(reset: true)
         }
         .agentPageContext(.tab("browser:\(source.id)"))
+        .onAppear {
+            publishAgentPageContent()
+        }
         .onChange(of: navigation.pendingComicID) { _, _ in
             guard navigation.currentContext == .tab("browser:\(source.id)"),
                   let comicID = navigation.consumePendingComic() else { return }
             selectedComicId = comicID
         }
+        .onChange(of: blockedWords.currentSnapshot.revision) { _, revision in
+            viewModel.recordBlockedRevision(revision)
+            publishAgentPageContent()
+        }
+        .onChange(of: viewModel.comics.map(\.id)) { _, _ in
+            publishAgentPageContent()
+        }
+        .onDisappear {
+            agentPageContent.clear(ownerID: pageContentOwnerID)
+        }
     }
-    
-    private var contentEmptyState: some View {
+
+    private func publishAgentPageContent() {
+        let sourceName = switch source {
+        case let .category(name): "category.\(name)"
+        case .favorites: "favorites"
+        }
+        agentPageContent.publish(
+            PicaAgentAdapters.pageContent(
+                source: sourceName,
+                title: source.title,
+                comics: visibleComics,
+                itemLimit: AgentPageContentSnapshot.maximumComicItems
+            ),
+            ownerID: pageContentOwnerID
+        )
+    }
+
+    private var visibleComics: [ComicSummary] {
+        viewModel.visibleComics(for: blockedWords.currentSnapshot)
+    }
+
+    private func contentEmptyState(hiddenByFilter: Bool) -> some View {
         VStack(spacing: 10) {
             Image(systemName: source == .favorites ? "heart.slash" : "book.closed")
                 .font(.system(size: 44, weight: .regular))
                 .foregroundStyle(.secondary.opacity(0.45))
-            Text(source.emptyTitle)
+            Text(hiddenByFilter ? localization.text("contentFilter.resultsHidden") : source.emptyTitle)
                 .font(.system(size: 18, weight: .semibold))
-            Text(source.emptySubtitle)
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            if !hiddenByFilter {
+                Text(source.emptySubtitle)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 240)
     }
-    
+
     private func contentErrorState(message: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
@@ -197,9 +259,7 @@ struct ComicsBrowserView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             Button(localization.text("common.reload")) {
-                Task {
-                    await viewModel.load(reset: true)
-                }
+                Task { await viewModel.load(reset: true) }
             }
             .buttonStyle(.borderedProminent)
         }

@@ -98,18 +98,21 @@ private struct ComicCardSkeleton: View {
 private struct LazyGridRevealModifier: ViewModifier {
     let index: Int
     @State private var isVisible = false
+    @EnvironmentObject private var appearance: AppAppearanceStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
+        let profile = appearance.motionProfile(systemReduceMotion: reduceMotion)
+        let usesSpatialMotion = profile.mode == .standard
         content
             .opacity(isVisible ? 1 : 0)
-            .scaleEffect(isVisible ? 1 : 0.965, anchor: .top)
-            .offset(y: isVisible ? 0 : 18)
+            .scaleEffect(isVisible || !usesSpatialMotion ? 1 : 0.965, anchor: .top)
+            .offset(y: isVisible || !usesSpatialMotion ? 0 : 18)
             .onAppear {
                 guard !isVisible else { return }
-                withAnimation(
-                    .spring(response: 0.38, dampingFraction: 0.84)
-                    .delay(min(Double(index % 8) * 0.035, 0.22))
-                ) {
+                if let animation = profile.gridAnimation(index: index) {
+                    withAnimation(animation) { isVisible = true }
+                } else {
                     isVisible = true
                 }
             }

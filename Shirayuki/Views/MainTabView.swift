@@ -4,6 +4,8 @@ import SwiftUI
 struct MainTabView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var navigation: AppNavigationCoordinator
+    @EnvironmentObject private var appearance: AppAppearanceStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedTab: AppTab = .home
     
     var body: some View {
@@ -12,23 +14,26 @@ struct MainTabView: View {
                 switch appState.startupState {
                 case .loading(let phase):
                     StartupStatusView(phase: phase)
-                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                        .transition(appearance.motionProfile(systemReduceMotion: reduceMotion).sessionTransition)
                 case .readyAuthenticated:
                     authenticatedTabs
-                        .transition(.sessionScreen)
+                        .transition(appearance.motionProfile(systemReduceMotion: reduceMotion).sessionTransition)
                 case .readyUnauthenticated:
                     LoginView()
-                        .transition(.sessionScreen)
+                        .transition(appearance.motionProfile(systemReduceMotion: reduceMotion).sessionTransition)
                 case .failed(let message):
                     StartupFailureView(
                         message: message,
                         retry: appState.retryStartup,
                         login: appState.logout
                     )
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    .transition(appearance.motionProfile(systemReduceMotion: reduceMotion).sessionTransition)
                 }
             }
-            .animation(.sessionSpring, value: appState.startupState)
+            .animation(
+                appearance.motionProfile(systemReduceMotion: reduceMotion).agentAnimation,
+                value: appState.startupState
+            )
             .ignoresSafeArea(.keyboard)
             .onChange(of: navigation.pendingComicID) { _, comicID in
                 guard comicID != nil else { return }
@@ -103,23 +108,6 @@ struct MainTabView: View {
     }
 }
 
-private extension AnyTransition {
-    static let sessionScreen = AnyTransition.asymmetric(
-        insertion: .scale(scale: 0.92, anchor: .center)
-            .combined(with: .move(edge: .bottom)),
-        removal: .scale(scale: 1.06, anchor: .center)
-            .combined(with: .move(edge: .leading))
-    )
-}
-
-private extension Animation {
-    static let sessionSpring = Animation.interpolatingSpring(
-        mass: 1,
-        stiffness: 170,
-        damping: 21,
-        initialVelocity: 0.32
-    )
-}
 
 private struct StartupStatusView: View {
     let phase: StartupLoadingPhase
@@ -203,6 +191,7 @@ struct AgentUITestSurfaceHost: View {
         case searchFilters
         case downloadOptions
         case offlineDownload
+        case comicActions
 
         var id: String { rawValue }
     }
@@ -252,6 +241,11 @@ struct AgentUITestSurfaceHost: View {
                     }
                     .accessibilityIdentifier("offlineDownloadButton")
 
+                    Button("Comic actions") {
+                        presentedSurface = .comicActions
+                    }
+                    .accessibilityIdentifier("comicActionsButton")
+
                     Button("Reader") {
                         isReaderPresented = true
                     }
@@ -279,6 +273,8 @@ struct AgentUITestSurfaceHost: View {
                         .agentSurfaceHost(
                             context: .nonSettingsSheet(parent: .tab("ui-test"), kind: surface.rawValue)
                         )
+                case .comicActions:
+                    ComicActionUITestSurface()
                 }
             }
             #if os(iOS)

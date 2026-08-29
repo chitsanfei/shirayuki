@@ -1,6 +1,18 @@
 import Foundation
 import Combine
 
+/// Identifies the currently presented surface without retaining a View.
+nonisolated indirect enum AgentPageContext: Equatable, Sendable {
+    case startup(StartupLoadingPhase)
+    case failed
+    case login
+    case tab(String)
+    case detail(comicID: String)
+    case offlineLibrary
+    case reader(comicID: String, chapterID: String?, pageIndex: Int)
+    case nonSettingsSheet(parent: AgentPageContext, kind: String)
+}
+
 /// Opaque registration for one visible app surface.
 nonisolated struct AgentContextRegistration: Hashable, Sendable {
     fileprivate let id: UUID

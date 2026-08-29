@@ -67,6 +67,10 @@ final class ComicDetailViewModel: ObservableViewModel {
         }
     }
 
+    func visibleRecommendations(for snapshot: BlockedWordSnapshot) -> [ComicSummary] {
+        PicaAgentAdapters.visibleComics(recommendations, snapshot: snapshot)
+    }
+
     func refreshReadProgress() {
         readProgress = ReaderProgressStore.shared.progress(for: comicId)
     }

@@ -1,34 +1,5 @@
 import Foundation
 
-// MARK: - Startup and page context
-
-/// Distinct startup phases presented while the session is being prepared.
-nonisolated enum StartupLoadingPhase: String, Equatable, Sendable {
-    case preparing
-    case validatingSession
-    case restoringCredentials
-    case loadingProfile
-}
-
-/// Explicit startup lifecycle consumed by the root UI.
-nonisolated enum StartupState: Equatable, Sendable {
-    case loading(StartupLoadingPhase)
-    case readyAuthenticated
-    case readyUnauthenticated
-    case failed(message: String)
-}
-
-/// Identifies the currently presented surface without retaining a View.
-nonisolated indirect enum AgentPageContext: Equatable, Sendable {
-    case startup(StartupLoadingPhase)
-    case failed
-    case login
-    case tab(String)
-    case detail(comicID: String)
-    case offlineLibrary
-    case reader(comicID: String, chapterID: String?, pageIndex: Int)
-    case nonSettingsSheet(parent: AgentPageContext, kind: String)
-}
 
 nonisolated enum AgentPageKind: String, Equatable, Sendable {
     case startup
@@ -56,6 +27,61 @@ nonisolated struct AgentPageSnapshot: Equatable, Sendable {
     let chapterID: String?
 }
 
+nonisolated struct AgentVisibleComicItem: Equatable, Sendable, Identifiable {
+    let comicID: String
+    let title: String
+    let author: String
+    let categories: [String]
+    let tags: [String]
+    let chapterCount: Int
+    let finished: Bool
+
+    var id: String { comicID }
+}
+
+nonisolated struct AgentComicDetailSnapshot: Equatable, Sendable {
+    let comicID: String
+    let title: String
+    let author: String
+    let summary: String
+    let categories: [String]
+    let tags: [String]
+    let chapterCount: Int
+    let pageCount: Int
+    let totalViews: Int
+    let likesCount: Int
+    let finished: Bool
+    let isLiked: Bool
+    let isFavorited: Bool
+    let recommendations: [AgentVisibleComicItem]
+}
+
+nonisolated enum AgentPageContentSnapshot: Equatable, Sendable {
+    static let defaultComicItemLimit = 12
+    static let maximumComicItems = 100
+    static let maximumRecommendations = 8
+
+    case unavailable
+    case comicList(
+        source: String,
+        title: String,
+        items: [AgentVisibleComicItem],
+        totalVisible: Int
+    )
+    case comicDetail(AgentComicDetailSnapshot)
+
+    var comicIDs: [String] {
+        switch self {
+        case .unavailable:
+            []
+        case let .comicList(_, _, items, _):
+            items.map(\.comicID)
+        case let .comicDetail(detail):
+            [detail.comicID] + detail.recommendations.map(\.comicID)
+        }
+    }
+}
+
 nonisolated struct AgentReaderSnapshot: Equatable, Sendable {
     let comicID: String
     let comicTitle: String
@@ -76,7 +102,7 @@ nonisolated struct AgentUserSnapshot: Equatable, Sendable {
     let favoriteCount: Int?
 }
 
-/// Minimal favorite item; it deliberately omits ComicSummary.thumb and other fields.
+/// Minimal favorite item; remote thumbnails and transport fields are deliberately omitted.
 nonisolated struct AgentFavoriteItem: Equatable, Sendable, Identifiable {
     let comicID: String
     let title: String
@@ -100,15 +126,6 @@ nonisolated struct AgentFavoriteItem: Equatable, Sendable, Identifiable {
         self.finished = finished
     }
 
-    init(_ summary: ComicSummary) {
-        self.init(
-            comicID: summary.id,
-            title: summary.title,
-            author: summary.author,
-            chapterCount: summary.epsCount,
-            finished: summary.finished
-        )
-    }
 }
 
 nonisolated struct AgentLibraryItem: Equatable, Sendable, Identifiable {
@@ -140,15 +157,6 @@ nonisolated struct AgentLibraryItem: Equatable, Sendable, Identifiable {
 
     var id: String { comicID }
 
-    init(_ record: OfflineComicRecord) {
-        comicID = record.id
-        title = record.title
-        chapterCount = record.chapters.count
-        imageCount = record.imageCount
-        quality = record.quality
-        byteCount = record.byteCount
-        downloadedAt = record.downloadedAt
-    }
 }
 
 nonisolated struct AgentSearchItem: Equatable, Sendable, Identifiable {
@@ -160,13 +168,6 @@ nonisolated struct AgentSearchItem: Equatable, Sendable, Identifiable {
 
     var id: String { comicID }
 
-    init(_ summary: ComicSummary) {
-        comicID = summary.id
-        title = summary.title
-        author = summary.author
-        chapterCount = summary.epsCount
-        finished = summary.finished
-    }
 }
 
 nonisolated enum AgentDownloadState: String, Equatable, Sendable {
@@ -193,6 +194,7 @@ nonisolated struct AgentBaseSnapshot: Equatable, Sendable {
     let isLoggedIn: Bool
     let page: AgentPageSnapshot
     let reader: AgentReaderSnapshot?
+    let pageContent: AgentPageContentSnapshot
 }
 
 // MARK: - Provider contracts
@@ -266,10 +268,14 @@ nonisolated enum AgentCommand: Equatable, Sendable {
     case goToReaderPage(Int)
     case goToReaderChapter(chapterID: String, pageIndex: Int?)
     case currentPageContent
-    case startDownload(comicID: String, chapterIDs: [String], quality: AppImageQuality)
+    case startDownload(comicID: String, chapterIDs: [String], quality: AppImageQuality, commandID: String)
     case cancelDownload(jobID: String, commandID: String)
     case setLiked(comicID: String, isLiked: Bool, commandID: String)
     case setFavorited(comicID: String, isFavorited: Bool, commandID: String)
+    case listBlockedWords
+    case addBlockedWord(word: String, commandID: String)
+    case updateBlockedWord(oldWord: String, newWord: String, commandID: String)
+    case removeBlockedWord(word: String, commandID: String)
 
     var name: String {
         switch self {
@@ -288,6 +294,10 @@ nonisolated enum AgentCommand: Equatable, Sendable {
         case .cancelDownload: return "cancelDownload"
         case .setLiked: return "setLiked"
         case .setFavorited: return "setFavorited"
+        case .listBlockedWords: return "listBlockedWords"
+        case .addBlockedWord: return "addBlockedWord"
+        case .updateBlockedWord: return "updateBlockedWord"
+        case .removeBlockedWord: return "removeBlockedWord"
         }
     }
 }
@@ -304,6 +314,7 @@ nonisolated enum AgentCommandError: Error, Equatable, Sendable {
     case pageImageRateLimited
     case downloadConflict(existingJobIDs: [String])
     case providerFailure
+    case blockedWord(BlockedWordValidationError)
 }
 
 nonisolated enum AgentDesiredState: String, Equatable, Sendable {
@@ -333,9 +344,16 @@ nonisolated enum AgentConfirmationPreview: Equatable, Sendable {
         desired: Bool
     )
     case currentPage(providerHost: String)
+    case blockedWordAdd(displayValue: String, normalizedKey: String)
+    case blockedWordUpdate(
+        oldDisplayValue: String,
+        oldNormalizedKey: String,
+        newDisplayValue: String,
+        newNormalizedKey: String
+    )
+    case blockedWordRemove(displayValue: String, normalizedKey: String)
 }
 nonisolated enum AgentCommandResult: Equatable, Sendable {
-
     case context(AgentBaseSnapshot)
     case user(AgentUserSnapshot)
     case favorites(items: [AgentFavoriteItem], page: Int, sort: ComicSortType)
@@ -349,6 +367,7 @@ nonisolated enum AgentCommandResult: Equatable, Sendable {
     case queuedDownload(jobID: String)
     case cancelledDownload(jobID: String)
     case desiredStateApplied(comicID: String, isLiked: Bool?, isFavorited: Bool?)
+    case blockedWords(snapshot: BlockedWordSnapshot, operation: String?)
     case requiresConfirmation(AgentConfirmationPreview)
     case loginRequired
     case capabilityRequired
@@ -360,21 +379,12 @@ nonisolated enum AgentCommandResult: Equatable, Sendable {
 // MARK: - Redaction helpers
 
 nonisolated enum AgentRedactor {
-    static func user(_ profile: UserProfileResponse, favoriteCount: Int? = nil) -> AgentUserSnapshot {
-        AgentUserSnapshot(
-            displayName: profile.name,
-            level: profile.level,
-            exp: profile.exp,
-            isPunched: profile.isPunched,
-            favoriteCount: favoriteCount
-        )
-    }
 
     static func promptProjection(for command: AgentCommand) -> AgentPromptProjection {
         let excluded = ["token", "password", "email", "birthday", "avatarURL", "filePath", "fileName", "rawURL", "rawJSON"]
         switch command {
         case .currentContext:
-            return AgentPromptProjection(commandName: command.name, allowedFields: ["pageContext", "title", "loginState", "readerSummary"], excludedFields: excluded)
+            return AgentPromptProjection(commandName: command.name, allowedFields: ["pageContext", "title", "loginState", "readerSummary", "visibleComicItems", "comicDetail"], excludedFields: excluded)
         case .currentUser:
             return AgentPromptProjection(commandName: command.name, allowedFields: ["displayName", "level", "exp", "isPunched", "favoriteCount"], excludedFields: excluded + ["favorites", "offlineLibrary", "downloads"])
         case .favoritePage:
@@ -397,6 +407,12 @@ nonisolated enum AgentRedactor {
             return AgentPromptProjection(commandName: command.name, allowedFields: ["jobID", "state"], excludedFields: excluded + ["user", "favorites", "fullLibrary"])
         case .setLiked, .setFavorited:
             return AgentPromptProjection(commandName: command.name, allowedFields: ["comicID", "desiredState", "knownCurrentState"], excludedFields: excluded + ["user", "favorites", "offlineLibrary", "downloads", "imageData"])
+        case .listBlockedWords, .addBlockedWord, .updateBlockedWord, .removeBlockedWord:
+            return AgentPromptProjection(
+                commandName: command.name,
+                allowedFields: ["revision", "normalizedKey", "displayValue", "operation"],
+                excludedFields: excluded + ["user", "favorites", "offlineLibrary", "downloads", "imageData"]
+            )
         }
     }
 }
@@ -406,7 +422,10 @@ nonisolated enum AgentResultProjector {
     static func project(_ result: AgentCommandResult, for command: AgentCommand) -> String? {
         switch (command, result) {
         case (.currentContext, let .context(value)):
-            return "kind=\(value.page.kind.rawValue); title=\(value.page.title); comicID=\(value.page.comicID ?? "none"); chapterID=\(value.page.chapterID ?? "none"); loggedIn=\(value.isLoggedIn)"
+            let reader = value.reader.map {
+                "readerComicTitle=\($0.comicTitle); readerChapterTitle=\($0.chapterTitle); readerPage=\($0.pageIndex + 1)/\($0.pageCount); readerSource=\($0.source.rawValue)"
+            } ?? "reader=none"
+            return "kind=\(value.page.kind.rawValue); title=\(value.page.title); comicID=\(value.page.comicID ?? "none"); chapterID=\(value.page.chapterID ?? "none"); loggedIn=\(value.isLoggedIn)\n\(reader)\n\(pageContentProjection(value.pageContent))"
         case (.currentUser, let .user(value)):
             return "displayName=\(value.displayName); level=\(value.level); exp=\(value.exp); isPunched=\(value.isPunched); favoriteCount=\(value.favoriteCount.map(String.init) ?? "none")"
         case (.favoritePage, let .favorites(items, page, sort)):
@@ -444,8 +463,40 @@ nonisolated enum AgentResultProjector {
             return "comicID=\(comicID); isLiked=\(isLiked.map(String.init) ?? "none")"
         case (.setFavorited, let .desiredStateApplied(comicID, _, isFavorited)):
             return "comicID=\(comicID); isFavorited=\(isFavorited.map(String.init) ?? "none")"
+        case (.listBlockedWords, let .blockedWords(snapshot, operation)),
+             (.addBlockedWord, let .blockedWords(snapshot, operation)),
+             (.updateBlockedWord, let .blockedWords(snapshot, operation)),
+             (.removeBlockedWord, let .blockedWords(snapshot, operation)):
+            let rules = snapshot.rules.prefix(100).map {
+                "normalizedKey=\($0.normalizedKey); displayValue=\($0.displayValue)"
+            }.joined(separator: "\n")
+            return "operation=\(operation ?? "list"); revision=\(snapshot.revision)\n\(rules)"
         default:
             return nil
         }
+    }
+
+    private static func pageContentProjection(_ content: AgentPageContentSnapshot) -> String {
+        switch content {
+        case .unavailable:
+            return "visiblePageContent=unavailable"
+        case let .comicList(source, title, items, totalVisible):
+            let rows = items.map(comicRow).joined(separator: "\n")
+            return "visiblePageSource=\(source); visiblePageTitle=\(title); totalVisible=\(totalVisible); returned=\(items.count)\n\(rows)"
+        case let .comicDetail(detail):
+            let recommendations = detail.recommendations.map(comicRow).joined(separator: "\n")
+            let summary = detail.summary.replacingOccurrences(of: "\n", with: " ")
+            return """
+            detailComicID=\(detail.comicID); detailTitle=\(detail.title); detailAuthor=\(detail.author); chapters=\(detail.chapterCount); pages=\(detail.pageCount); views=\(detail.totalViews); likes=\(detail.likesCount); finished=\(detail.finished); isLiked=\(detail.isLiked); isFavorited=\(detail.isFavorited)
+            detailCategories=\(detail.categories.joined(separator: ", ")); detailTags=\(detail.tags.joined(separator: ", "))
+            detailSummary=\(summary)
+            recommendationsReturned=\(detail.recommendations.count)
+            \(recommendations)
+            """
+        }
+    }
+
+    private static func comicRow(_ item: AgentVisibleComicItem) -> String {
+        "comicID=\(item.comicID); title=\(item.title); author=\(item.author); categories=\(item.categories.joined(separator: ",")); tags=\(item.tags.joined(separator: ",")); chapterCount=\(item.chapterCount); finished=\(item.finished)"
     }
 }

@@ -139,6 +139,10 @@ final class AgentUIState: ObservableObject {
 struct AgentFloatingButton: View {
     let avoidsReaderControls: Bool
     @EnvironmentObject private var uiState: AgentUIState
+    @EnvironmentObject private var appearance: AppAppearanceStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var isKeyboardFocused: Bool
+    @AccessibilityFocusState private var isVoiceOverFocused: Bool
     @State private var position: CGPoint?
     @State private var dragOrigin: CGPoint?
     @State private var dragDistance: CGFloat = 0
@@ -151,6 +155,31 @@ struct AgentFloatingButton: View {
 
     private var reservedTop: CGFloat { avoidsReaderControls ? 64 : 0 }
     private var reservedBottom: CGFloat { avoidsReaderControls ? 190 : 0 }
+
+    private var buttonLabel: some View {
+        ZStack {
+            if appearance.buttonStyle == .glass {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                    .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+            } else {
+                Circle()
+                    .fill(Color.accentColor)
+                    .overlay(Circle().stroke(Color.white.opacity(0.24), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.24), radius: 14, x: 0, y: 7)
+            }
+            Image(systemName: "sparkles")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(appearance.buttonStyle == .glass ? Color.accentColor : .white)
+        }
+        .frame(width: buttonSize, height: buttonSize)
+        .opacity(
+            dragOrigin != nil || isKeyboardFocused || isVoiceOverFocused
+                ? 1
+                : appearance.buttonOpacity
+        )
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -173,16 +202,12 @@ struct AgentFloatingButton: View {
             Button {
                 uiState.isConversationPresented = true
             } label: {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: buttonSize, height: buttonSize)
-                    .background(Color.accentColor, in: Circle())
-                    .overlay(Circle().stroke(Color.white.opacity(0.24), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.24), radius: 14, x: 0, y: 7)
+                buttonLabel
             }
             .buttonStyle(.plain)
             .contentShape(Circle())
+            .focused($isKeyboardFocused)
+            .accessibilityFocused($isVoiceOverFocused)
             .accessibilityIdentifier("agentFloatingButton")
             .accessibilityLabel(AppLocalization.text("agent.button.open"))
             .accessibilityHint(AppLocalization.text("agent.accessibility.dragHint"))
@@ -298,8 +323,23 @@ struct AgentFloatingButton: View {
                             uiState.isConversationPresented = true
                             position = displayedPosition
                         } else if let position {
-                            uiState.persist(
+                            let clamped = uiState.clamped(
                                 position,
+                                in: bounds,
+                                safeArea: geometry.safeAreaInsets,
+                                buttonSize: buttonSize,
+                                reservedTop: reservedTop,
+                                reservedBottom: reservedBottom
+                            )
+                            if let animation = appearance.motionProfile(
+                                systemReduceMotion: reduceMotion
+                            ).buttonReleaseAnimation {
+                                withAnimation(animation) { self.position = clamped }
+                            } else {
+                                self.position = clamped
+                            }
+                            uiState.persist(
+                                clamped,
                                 in: bounds,
                                 safeArea: geometry.safeAreaInsets,
                                 buttonSize: buttonSize,

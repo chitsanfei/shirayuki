@@ -18,6 +18,8 @@ struct AgentOverlayHost<Content: View>: View {
 
     @EnvironmentObject private var navigation: AppNavigationCoordinator
     @EnvironmentObject private var uiState: AgentUIState
+    @EnvironmentObject private var appearance: AppAppearanceStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var presenterID = UUID()
     @State private var contextRegistration: AgentContextRegistration?
 
@@ -32,12 +34,22 @@ struct AgentOverlayHost<Content: View>: View {
                     ZStack {
                         AgentFloatingButton(avoidsReaderControls: isReaderContext)
                         if uiState.isConversationPresented {
-                            AgentConversationView()
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                            Color.black.opacity(0.20)
+                                .ignoresSafeArea()
+                                .contentShape(Rectangle())
+                                .onTapGesture { uiState.isConversationPresented = false }
+                                .transition(.opacity)
                                 .zIndex(1)
+
+                            AgentConversationView()
+                                .transition(appearance.motionProfile(systemReduceMotion: reduceMotion).agentTransition)
+                                .zIndex(2)
                         }
                     }
-                    .animation(.easeInOut(duration: 0.2), value: uiState.isConversationPresented)
+                    .animation(
+                        appearance.motionProfile(systemReduceMotion: reduceMotion).agentAnimation,
+                        value: uiState.isConversationPresented
+                    )
                 }
             }
             .onAppear {

@@ -28,20 +28,51 @@ struct SettingsCategoryRow: View {
 struct AppearanceSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var localization = AppLocalization.shared
+    @EnvironmentObject private var appearance: AppAppearanceStore
 
     var body: some View {
         Form {
             Section(localization.text("settings.appearance")) {
-                Picker(
-                    localization.text("settings.theme"),
-                    selection: Binding(
-                        get: { viewModel.themeMode },
-                        set: { viewModel.setThemeMode($0) }
-                    )
-                ) {
+                Picker(localization.text("settings.theme"), selection: themeBinding) {
                     ForEach(AppThemeMode.allCases) { mode in
                         Text(mode.title).tag(mode)
                     }
+                }
+
+                Picker(
+                    localization.text("settings.appearance.animation"),
+                    selection: animationBinding
+                ) {
+                    ForEach(AppAnimationMode.allCases) { mode in
+                        Text(localization.text("settings.appearance.animation.\(mode.rawValue)"))
+                            .tag(mode)
+                    }
+                }
+
+                Picker(
+                    localization.text("settings.appearance.agentButtonStyle"),
+                    selection: buttonStyleBinding
+                ) {
+                    ForEach(AgentFloatingButtonStyle.allCases) { style in
+                        Text(localization.text("settings.appearance.agentButtonStyle.\(style.rawValue)"))
+                            .tag(style)
+                    }
+                }
+
+                VStack(alignment: .leading) {
+                    Text(
+                        "\(localization.text("settings.appearance.agentButtonOpacity")) "
+                        + "\(Int((appearance.buttonOpacity * 100).rounded()))%"
+                    )
+                    Slider(
+                        value: Binding(
+                            get: { appearance.buttonOpacity },
+                            set: { appearance.setButtonOpacity($0) }
+                        ),
+                        in: 0.40...1.00,
+                        step: 0.05
+                    )
+                    .accessibilityIdentifier("agentButtonOpacitySlider")
                 }
 
                 Picker(
@@ -61,6 +92,307 @@ struct AppearanceSettingsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+    }
+
+    private var themeBinding: Binding<AppThemeMode> {
+        Binding(get: { appearance.themeMode }, set: { appearance.setThemeMode($0) })
+    }
+
+    private var animationBinding: Binding<AppAnimationMode> {
+        Binding(get: { appearance.animationMode }, set: { appearance.setAnimationMode($0) })
+    }
+
+    private var buttonStyleBinding: Binding<AgentFloatingButtonStyle> {
+        Binding(get: { appearance.buttonStyle }, set: { appearance.setButtonStyle($0) })
+    }
+}
+
+struct BlockedWordsSettingsView: View {
+    @EnvironmentObject private var repository: UserDefaultsBlockedWordRepository
+    @ObservedObject private var localization = AppLocalization.shared
+    @State private var editorPresented = false
+    @State private var editorValue = ""
+    @State private var addingIncludedWord = false
+    @State private var dangerAction: ContentFilterDangerAction?
+    @State private var message: String?
+
+    var body: some View {
+        Form {
+            Section(localization.text("settings.contentFilter.operations")) {
+                Button {
+                    addingIncludedWord = false
+                    editorValue = ""
+                    editorPresented = true
+                } label: {
+                    Label(
+                        localization.text("settings.contentFilter.addBlocked"),
+                        systemImage: "nosign"
+                    )
+                }
+                .accessibilityIdentifier("addBlockedWordButton")
+
+                Button {
+                    addingIncludedWord = true
+                    editorValue = ""
+                    editorPresented = true
+                } label: {
+                    Label(
+                        localization.text("settings.contentFilter.addIncluded"),
+                        systemImage: "line.3.horizontal.decrease.circle"
+                    )
+                }
+                .accessibilityIdentifier("addIncludedWordButton")
+            }
+
+            Section(localization.text("settings.contentFilter.library")) {
+                LabeledContent(
+                    localization.text("settings.contentFilter.blockedCount"),
+                    value: "\(repository.currentSnapshot.rules.count)"
+                )
+                LabeledContent(
+                    localization.text("settings.contentFilter.includedCount"),
+                    value: "\(repository.currentSnapshot.includeRules.count)"
+                )
+
+                NavigationLink(localization.text("settings.contentFilter.viewBlocked")) {
+                    ContentFilterWordLibraryView(kind: .blocked)
+                }
+                .accessibilityIdentifier("viewBlockedWordsButton")
+
+                NavigationLink(localization.text("settings.contentFilter.viewIncluded")) {
+                    ContentFilterWordLibraryView(kind: .included)
+                }
+                .accessibilityIdentifier("viewIncludedWordsButton")
+            }
+
+            Section(localization.text("settings.contentFilter.danger")) {
+                Button(
+                    localization.text("settings.contentFilter.deleteAllBlocked"),
+                    role: .destructive
+                ) {
+                    dangerAction = .deleteBlocked
+                }
+                Button(
+                    localization.text("settings.contentFilter.deleteAllIncluded"),
+                    role: .destructive
+                ) {
+                    dangerAction = .deleteIncluded
+                }
+                Button(
+                    localization.text("settings.contentFilter.reset"),
+                    role: .destructive
+                ) {
+                    dangerAction = .reset
+                }
+            }
+
+            if let message {
+                Section {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .navigationTitle(localization.text("settings.contentFilter"))
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .alert(
+            editorPresented
+                ? localization.text(
+                    addingIncludedWord
+                        ? "settings.contentFilter.addIncluded"
+                        : "settings.contentFilter.addBlocked"
+                )
+                : localization.text("settings.contentFilter.edit"),
+            isPresented: $editorPresented
+        ) {
+            TextField(localization.text("settings.contentFilter.word"), text: $editorValue)
+            Button(localization.text("common.cancel"), role: .cancel) {}
+            Button(localization.text("common.apply")) {
+                Task { await saveEditor() }
+            }
+        }
+        .alert(item: $dangerAction) { action in
+            Alert(
+                title: Text(localization.text("settings.contentFilter.danger")),
+                message: Text(localization.text(action.confirmationKey)),
+                primaryButton: .destructive(Text(localization.text("common.delete"))) {
+                    Task { await execute(action) }
+                },
+                secondaryButton: .cancel()
+            )
+        }
+    }
+
+    private func saveEditor() async {
+        do {
+            if addingIncludedWord {
+                _ = try repository.addIncluded(display: editorValue)
+            } else {
+                _ = try await repository.add(display: editorValue)
+            }
+            editorPresented = false
+            message = localization.text("settings.contentFilter.saved")
+        } catch let error as BlockedWordValidationError {
+            message = localization.text("settings.contentFilter.error.\(error.rawValue)")
+        } catch {
+            message = localization.text("settings.contentFilter.error")
+        }
+    }
+
+    private func execute(_ action: ContentFilterDangerAction) async {
+        do {
+            switch action {
+            case .deleteBlocked:
+                _ = try repository.deleteAllBlocked()
+            case .deleteIncluded:
+                _ = try repository.deleteAllIncluded()
+            case .reset:
+                _ = try repository.resetFilters()
+            }
+            message = localization.text("settings.contentFilter.saved")
+        } catch {
+            message = localization.text("settings.contentFilter.error")
+        }
+    }
+}
+
+private enum ContentFilterDangerAction: String, Identifiable {
+    case deleteBlocked
+    case deleteIncluded
+    case reset
+
+    var id: String { rawValue }
+
+    var confirmationKey: String {
+        switch self {
+        case .deleteBlocked:
+            "settings.contentFilter.deleteAllBlocked.confirm"
+        case .deleteIncluded:
+            "settings.contentFilter.deleteAllIncluded.confirm"
+        case .reset:
+            "settings.contentFilter.reset.confirm"
+        }
+    }
+}
+
+private enum ContentFilterWordLibraryKind: String, Identifiable {
+    case blocked
+    case included
+
+    var id: String { rawValue }
+}
+
+private struct ContentFilterWordLibraryView: View {
+    let kind: ContentFilterWordLibraryKind
+    @EnvironmentObject private var repository: UserDefaultsBlockedWordRepository
+    @ObservedObject private var localization = AppLocalization.shared
+    @State private var editorPresented = false
+    @State private var editorValue = ""
+    @State private var editingRule: BlockedWordRule?
+
+    private var rules: [BlockedWordRule] {
+        switch kind {
+        case .blocked:
+            repository.currentSnapshot.rules
+        case .included:
+            repository.currentSnapshot.includeRules
+        }
+    }
+
+    var body: some View {
+        List {
+            ForEach(rules, id: \.normalizedKey) { rule in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(rule.displayValue)
+                    Text(rule.normalizedKey)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    if kind == .blocked {
+                        Button {
+                            editingRule = rule
+                            editorValue = rule.displayValue
+                            editorPresented = true
+                        } label: {
+                            Label(localization.text("settings.contentFilter.edit"), systemImage: "pencil")
+                        }
+                    }
+                }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        remove(rule)
+                    } label: {
+                        Label(localization.text("common.delete"), systemImage: "trash")
+                    }
+                }
+            }
+        }
+        .overlay {
+            if rules.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "books.vertical")
+                        .font(.title2)
+                    Text(
+                        localization.text(
+                            kind == .blocked
+                                ? "settings.contentFilter.viewBlocked"
+                                : "settings.contentFilter.viewIncluded"
+                        )
+                    )
+                    .font(.footnote)
+                }
+                .foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle(
+            localization.text(
+                kind == .blocked
+                    ? "settings.contentFilter.viewBlocked"
+                    : "settings.contentFilter.viewIncluded"
+            )
+        )
+        .alert(
+            localization.text("settings.contentFilter.edit"),
+            isPresented: $editorPresented
+        ) {
+            TextField(localization.text("settings.contentFilter.word"), text: $editorValue)
+            Button(localization.text("common.cancel"), role: .cancel) {}
+            Button(localization.text("common.apply")) {
+                Task { await saveEdit() }
+            }
+        }
+    }
+
+    private func saveEdit() async {
+        guard let editingRule else { return }
+        do {
+            _ = try await repository.update(
+                normalizedOld: editingRule.normalizedKey,
+                newDisplay: editorValue
+            )
+            editorPresented = false
+            self.editingRule = nil
+        } catch {
+            // Keep editor open so invalid input remains recoverable.
+        }
+    }
+
+    private func remove(_ rule: BlockedWordRule) {
+        Task {
+            do {
+                if kind == .blocked {
+                    _ = try await repository.remove(normalizedKey: rule.normalizedKey)
+                } else {
+                    _ = try repository.removeIncluded(normalizedKey: rule.normalizedKey)
+                }
+            } catch {
+                // Row is retained; repository remains source of truth.
+            }
+        }
     }
 }
 
@@ -350,13 +682,18 @@ private struct ProxyEditorSheet: View {
 struct StorageSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var localization = AppLocalization.shared
+    @EnvironmentObject private var runtime: AgentRuntime
+    @State private var confirmDeleteSessions = false
+    @State private var deletingSessions = false
+    @State private var sessionMessage: String?
 
     var body: some View {
         Form {
             Section(localization.text("settings.cache")) {
                 StorageUsageBar(
                     cacheBytes: viewModel.imageCacheSize,
-                    offlineBytes: viewModel.offlineStorageSize
+                    offlineBytes: viewModel.offlineStorageSize,
+                    sessionBytes: runtime.sessionStorageBytes
                 )
                 .padding(.vertical, 8)
 
@@ -370,9 +707,7 @@ struct StorageSettingsView: View {
                             : localization.text("settings.cache.clear")
                         )
                         Spacer()
-                        if viewModel.isClearingCache {
-                            ProgressView()
-                        }
+                        if viewModel.isClearingCache { ProgressView() }
                     }
                 }
                 .disabled(viewModel.isClearingCache)
@@ -381,13 +716,22 @@ struct StorageSettingsView: View {
                     OfflineComicsView()
                 }
 
-                Button(role: .destructive) {
+                Button(localization.text("settings.storage.offline.clear"), role: .destructive) {
                     viewModel.clearOfflineStorage()
-                } label: {
-                    Text(localization.text("settings.storage.offline.clear"))
                 }
 
-                if let message = viewModel.cacheMessage {
+                Button(role: .destructive) {
+                    confirmDeleteSessions = true
+                } label: {
+                    HStack {
+                        Text(localization.text("settings.storage.agent.deleteAll"))
+                        Spacer()
+                        if deletingSessions { ProgressView() }
+                    }
+                }
+                .disabled(runtime.sessionStorageBytes == 0 || deletingSessions)
+
+                if let message = sessionMessage ?? viewModel.cacheMessage {
                     Text(message)
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
@@ -398,15 +742,44 @@ struct StorageSettingsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .task { viewModel.refreshStorageUsage() }
+        .task {
+            viewModel.refreshStorageUsage()
+            await runtime.refreshHistory()
+        }
+        .alert(
+            localization.text("settings.storage.agent.deleteAll"),
+            isPresented: $confirmDeleteSessions
+        ) {
+            Button(localization.text("common.cancel"), role: .cancel) {}
+            Button(localization.text("common.delete"), role: .destructive) {
+                deleteAllSessions()
+            }
+        } message: {
+            Text(localization.text("settings.storage.agent.deleteAll.confirm"))
+        }
+    }
+
+    private func deleteAllSessions() {
+        deletingSessions = true
+        sessionMessage = nil
+        Task {
+            do {
+                try await runtime.deleteAll()
+                sessionMessage = localization.text("settings.storage.agent.deleteAll.done")
+            } catch {
+                sessionMessage = localization.text("settings.storage.agent.deleteAll.error")
+            }
+            deletingSessions = false
+        }
     }
 }
 
 private struct StorageUsageBar: View {
     let cacheBytes: Int
     let offlineBytes: Int
+    let sessionBytes: Int
 
-    private var total: Int { max(cacheBytes + offlineBytes, 1) }
+    private var total: Int { max(cacheBytes + offlineBytes + sessionBytes, 1) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -418,6 +791,9 @@ private struct StorageUsageBar: View {
                     Rectangle()
                         .fill(Color.orange)
                         .frame(width: geometry.size.width * CGFloat(offlineBytes) / CGFloat(total))
+                    Rectangle()
+                        .fill(Color.purple)
+                        .frame(width: geometry.size.width * CGFloat(sessionBytes) / CGFloat(total))
                     Spacer(minLength: 0)
                 }
                 .clipShape(Capsule())
@@ -429,6 +805,8 @@ private struct StorageUsageBar: View {
                 StorageLegend(color: .accentColor, title: AppLocalization.text("settings.storage.cache"), bytes: cacheBytes)
                 Spacer()
                 StorageLegend(color: .orange, title: AppLocalization.text("settings.storage.offline"), bytes: offlineBytes)
+                Spacer()
+                StorageLegend(color: .purple, title: AppLocalization.text("settings.storage.agent"), bytes: sessionBytes)
             }
         }
     }
@@ -526,36 +904,92 @@ struct AboutSettingsView: View {
     }
 }
 
-/// Configures the isolated OpenAI/OpenAI-compatible Agent transport.
+/// Configures Agent provider wire format, model, endpoint, and API key.
 struct AgentSettingsView: View {
     @ObservedObject private var store = LLMSettingsStore.shared
     @ObservedObject private var localization = AppLocalization.shared
+    @EnvironmentObject private var runtime: AgentRuntime
+    @EnvironmentObject private var blockedWords: UserDefaultsBlockedWordRepository
+    @State private var executionMode = AgentExecutionMode.ask
+    @State private var provider = LLMProvider.openAICompatible
+    @State private var autoCompactEnabled = LLMSettingsStore.defaultAutoCompactEnabled
+    @State private var autoCompactThresholdKiB = LLMSettingsStore.defaultAutoCompactThresholdKiB
+    @State private var toolCallLimit = LLMSettingsStore.defaultToolCallLimit
     @State private var model = ""
     @State private var baseURL = ""
     @State private var apiKey = ""
-    @State private var modelMessage: String?
-    @State private var endpointMessage: String?
-    @State private var apiKeyMessage: String?
+    @State private var message: String?
     @State private var pendingCustomEndpoint = false
     @State private var pendingCustomHost = ""
+    @State private var apiKeyRepresentsStoredValue = false
+    @FocusState private var apiKeyFocused: Bool
 
     var body: some View {
         Form {
-            Section(localization.text("settings.agent.provider")) {
-                Picker(
-                    localization.text("settings.agent.provider"),
-                    selection: Binding(
-                        get: { store.provider },
-                        set: {
-                            store.setProvider($0)
-                            baseURL = store.baseURLString
-                        }
+            Section(localization.text("settings.agent.history")) {
+                Text(localization.text("settings.agent.history.privacy"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                LabeledContent(
+                    localization.text("settings.agent.history.count"),
+                    value: "\(runtime.history.count)"
+                )
+                if let metadata = runtime.currentMetadata {
+                    LabeledContent(
+                        localization.text("settings.agent.history.updated"),
+                        value: metadata.updatedAt.formatted(date: .abbreviated, time: .shortened)
                     )
-                ) {
-                    Text(localization.text("settings.agent.provider.openAI"))
-                        .tag(LLMProvider.openAI)
+                    LabeledContent(
+                        localization.text("settings.agent.history.size"),
+                        value: ByteCountFormatter.string(
+                            fromByteCount: Int64(metadata.byteCount),
+                            countStyle: .file
+                        )
+                    )
+                }
+                NavigationLink(localization.text("settings.agent.history.manage")) {
+                    AgentSessionHistoryView()
+                }
+            }
+
+            Section(localization.text("settings.agent.provider")) {
+                Picker(localization.text("settings.agent.providerFormat"), selection: $provider) {
                     Text(localization.text("settings.agent.provider.openAICompatible"))
                         .tag(LLMProvider.openAICompatible)
+                    Text(localization.text("settings.agent.provider.anthropicCompatible"))
+                        .tag(LLMProvider.anthropicCompatible)
+                }
+                .accessibilityIdentifier("agentProviderFormatPicker")
+
+                Picker(
+                    localization.text("settings.agent.executionMode"),
+                    selection: $executionMode
+                ) {
+                    Text(localization.text("settings.agent.executionMode.ask"))
+                        .tag(AgentExecutionMode.ask)
+                    Text(localization.text("settings.agent.executionMode.yolo"))
+                        .tag(AgentExecutionMode.yolo)
+                }
+                .accessibilityIdentifier("agentExecutionModePicker")
+
+                if executionMode == .yolo {
+                    Text(localization.text("settings.agent.executionMode.yoloWarning"))
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                }
+
+                Toggle(
+                    localization.text("settings.contentFilter.agentConfirmation"),
+                    isOn: Binding(
+                        get: { blockedWords.confirmationRequired },
+                        set: { blockedWords.setConfirmationRequired($0) }
+                    )
+                )
+                .accessibilityIdentifier("blockedWordAgentConfirmationToggle")
+                if !blockedWords.confirmationRequired {
+                    Text(localization.text("settings.contentFilter.agentConfirmationRisk"))
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
                 }
 
                 TextField(localization.text("settings.agent.model"), text: $model)
@@ -563,76 +997,112 @@ struct AgentSettingsView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     #endif
+                    .accessibilityIdentifier("agentModelField")
 
-                Button(localization.text("common.apply")) {
-                    if !store.setModel(model) {
-                        modelMessage = localization.text("agent.state.configurationRequired")
-                    } else {
-                        modelMessage = nil
-                    }
-                }
-
-                if let modelMessage {
-                    Text(modelMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                }
-            }
-
-            Section(localization.text("settings.agent.baseURL")) {
                 TextField(localization.text("settings.agent.baseURL"), text: $baseURL)
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
                     #endif
+                    .accessibilityIdentifier("agentBaseURLField")
 
-                Button(localization.text("common.apply")) {
-                    saveEndpoint()
-                }
+                SecureField(localization.text("settings.agent.apiKey"), text: $apiKey)
+                    .textContentType(.password)
+                    .focused($apiKeyFocused)
+                    .accessibilityIdentifier("agentAPIKeyField")
+                    .onChange(of: apiKeyFocused) { _, focused in
+                        if focused, apiKeyRepresentsStoredValue {
+                            apiKey = ""
+                            apiKeyRepresentsStoredValue = false
+                        } else if !focused, apiKey.isEmpty, store.hasAPIKey {
+                            showStoredAPIKeyMask()
+                        }
+                    }
 
-                if let endpointMessage {
-                    Text(endpointMessage)
+                if let message {
+                    Text(message)
                         .font(.footnote)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.secondary)
                 }
             }
 
-            Section(localization.text("settings.agent.apiKey")) {
-                SecureField(localization.text("settings.agent.apiKey"), text: $apiKey)
-                    .textContentType(.password)
-
-                if store.hasAPIKey {
-                    Text(
-                        store.apiKeyLastFour.map {
-                            "\(localization.text("settings.agent.configured")) · ••••\($0)"
-                        } ?? localization.text("settings.agent.configured")
+            Section(localization.text("settings.agent.compaction")) {
+                Stepper(
+                    value: $toolCallLimit,
+                    in: 1...LLMSettingsStore.maximumToolCallLimit
+                ) {
+                    LabeledContent(
+                        localization.text("settings.agent.toolCallLimit"),
+                        value: "\(toolCallLimit)"
                     )
-                    .foregroundStyle(.secondary)
                 }
+                .accessibilityIdentifier("agentToolCallLimitStepper")
+                Text(localization.text("settings.agent.toolCallLimit.footer"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
 
-                HStack {
-                    Button(localization.text("common.apply")) {
-                        if store.saveAPIKey(apiKey) {
-                            apiKey = ""
-                            apiKeyMessage = nil
-                        } else {
-                            apiKeyMessage = localization.text("agent.state.configurationRequired")
+                Toggle(
+                    localization.text("settings.agent.compaction.auto"),
+                    isOn: $autoCompactEnabled
+                )
+                .accessibilityIdentifier("agentAutoCompactToggle")
+
+                if autoCompactEnabled {
+                    Picker(
+                        localization.text("settings.agent.compaction.threshold"),
+                        selection: $autoCompactThresholdKiB
+                    ) {
+                        ForEach(LLMSettingsStore.compactThresholdOptionsKiB, id: \.self) { value in
+                            Text("\(value) KiB").tag(value)
                         }
                     }
-                    Spacer()
-                    Button(localization.text("common.clear"), role: .destructive) {
-                        store.clearAPIKey()
-                        apiKey = ""
-                        apiKeyMessage = nil
-                    }
+                    .accessibilityIdentifier("agentAutoCompactThresholdPicker")
                 }
 
-                if let apiKeyMessage {
-                    Text(apiKeyMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
+                Text(localization.text("settings.agent.compaction.footer"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Button {
+                    applySettings()
+                } label: {
+                    HStack {
+                        Label(localization.text("common.apply"), systemImage: "checkmark.circle")
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
                 }
+                .accessibilityIdentifier("agentSettingsApplyButton")
+
+                Button(role: .destructive) {
+                    store.clearAPIKey()
+                    apiKey = ""
+                    apiKeyRepresentsStoredValue = false
+                    message = localization.text("settings.agent.cleared")
+                } label: {
+                    HStack {
+                        Label(localization.text("common.clear"), systemImage: "key.slash")
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("agentSettingsClearButton")
+
+                Button {
+                    store.resetToDefaults()
+                    loadPersistedValues()
+                    message = localization.text("settings.agent.resetDone")
+                } label: {
+                    HStack {
+                        Label(localization.text("settings.agent.reset"), systemImage: "arrow.counterclockwise")
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("agentSettingsResetButton")
             }
 
             Section {
@@ -646,11 +1116,12 @@ struct AgentSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .onAppear {
-            model = store.model
-            baseURL = store.baseURLString
+            loadPersistedValues()
+            Task { await runtime.refreshHistory() }
         }
         .onDisappear {
             apiKey = ""
+            apiKeyRepresentsStoredValue = false
         }
         .alert(
             localization.text("settings.agent.confirmCustomHost"),
@@ -658,32 +1129,126 @@ struct AgentSettingsView: View {
         ) {
             Button(localization.text("common.cancel"), role: .cancel) {}
             Button(localization.text("settings.agent.confirmCustomHost")) {
-                if store.setBaseURL(baseURL, privacyConfirmed: true) {
-                    baseURL = store.baseURLString
-                    endpointMessage = nil
-                } else {
-                    endpointMessage = localization.text("settings.agent.httpsRequired")
-                }
+                applySettings(privacyConfirmed: true)
             }
         } message: {
             Text(
-                "\(localization.text("settings.agent.customHostPrivacy"))\n\n\(localization.text("settings.agent.customHost", pendingCustomHost))"
+                "\(localization.text("settings.agent.customHostPrivacy"))\n\n"
+                + localization.text("settings.agent.customHost", pendingCustomHost)
             )
         }
     }
 
-    private func saveEndpoint() {
-        guard let endpoint = LLMSettingsStore.validEndpoint(baseURL) else {
-            endpointMessage = localization.text("settings.agent.httpsRequired")
-            return
-        }
-        if endpoint == LLMSettingsStore.defaultEndpoint {
-            _ = store.setBaseURL(baseURL)
-            baseURL = store.baseURLString
-            endpointMessage = nil
-        } else {
-            pendingCustomHost = endpoint.host ?? endpoint.absoluteString
+    private func applySettings(privacyConfirmed: Bool = false) {
+        switch store.apply(
+            provider: provider,
+            model: model,
+            baseURL: baseURL,
+            apiKey: apiKeyRepresentsStoredValue ? "" : apiKey,
+            executionMode: executionMode,
+            autoCompactEnabled: autoCompactEnabled,
+            autoCompactThresholdKiB: autoCompactThresholdKiB,
+            toolCallLimit: toolCallLimit,
+            privacyConfirmed: privacyConfirmed
+        ) {
+        case .applied:
+            loadPersistedValues()
+            message = localization.text("settings.agent.applied")
+        case .invalid:
+            message = localization.text("agent.state.configurationRequired")
+        case let .privacyConfirmationRequired(host):
+            pendingCustomHost = host
             pendingCustomEndpoint = true
+        }
+    }
+
+    private func loadPersistedValues() {
+        provider = store.provider
+        executionMode = store.executionMode
+        autoCompactEnabled = store.autoCompactEnabled
+        autoCompactThresholdKiB = store.autoCompactThresholdKiB
+        toolCallLimit = store.toolCallLimit
+        model = store.model
+        baseURL = store.baseURLString
+        if store.hasAPIKey {
+            showStoredAPIKeyMask()
+        } else {
+            apiKey = ""
+            apiKeyRepresentsStoredValue = false
+        }
+    }
+
+    private func showStoredAPIKeyMask() {
+        apiKey = String(repeating: "x", count: 12)
+        apiKeyRepresentsStoredValue = true
+    }
+}
+
+
+struct AgentSessionHistoryView: View {
+    @EnvironmentObject private var runtime: AgentRuntime
+    @ObservedObject private var localization = AppLocalization.shared
+
+    var body: some View {
+        List {
+            Section {
+                Text(localization.text("settings.agent.history.privacy"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Button {
+                    runtime.requestNewSession()
+                } label: {
+                    Label(localization.text("settings.agent.history.new"), systemImage: "square.and.pencil")
+                }
+                .disabled(runtime.isSideEffectExecuting)
+
+                ForEach(runtime.history) { session in
+                    Button {
+                        runtime.requestSelectSession(session.id)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(session.title)
+                                .foregroundStyle(.primary)
+                            Text(
+                                "\(session.updatedAt.formatted(date: .abbreviated, time: .shortened)) · "
+                                + ByteCountFormatter.string(
+                                    fromByteCount: Int64(session.byteCount),
+                                    countStyle: .file
+                                )
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                    .swipeActions {
+                        Button(role: .destructive) {
+                            runtime.requestDeleteSession(session.id)
+                        } label: {
+                            Label(localization.text("common.delete"), systemImage: "trash")
+                        }
+                        .disabled(runtime.isSideEffectExecuting)
+                    }
+                }
+            }
+        }
+        .navigationTitle(localization.text("settings.agent.history"))
+        .task { await runtime.refreshHistory() }
+        .alert(
+            localization.text("settings.agent.history.cancelActive"),
+            isPresented: Binding(
+                get: { runtime.pendingHistoryAction != nil },
+                set: { if !$0 { runtime.cancelHistoryAction() } }
+            )
+        ) {
+            Button(localization.text("common.cancel"), role: .cancel) {
+                runtime.cancelHistoryAction()
+            }
+            Button(localization.text("common.continue"), role: .destructive) {
+                runtime.confirmHistoryAction()
+            }
         }
     }
 }

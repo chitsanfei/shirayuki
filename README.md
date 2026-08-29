@@ -37,13 +37,15 @@
   - 菜单锁定、阅读进度自动保存、继续阅读
   - 在线 / 离线阅读，支持按章节下载、下载进度与本地书库
 - **个人中心**：用户信息、EXP / 等级、收藏浏览、每日打卡
-- **设置**：系统 / 浅色 / 深色主题、多语言切换（简中 / 繁中 / 英 / 日）、API 线路与图片质量、缓存管理，以及 OpenAI / OpenAI-compatible 的 Provider、API Key、模型和 Base URL 配置
-- **Agent 助手**：所有非设置页面提供可拖动浮动入口，可在对话中搜索漫画、打开详情、导航阅读器、跳转章节 / 页码和管理下载；敏感操作需要用户确认
+- **设置**：主题、多语言、动画模式、Agent 浮动按钮样式/透明度、远程漫画屏蔽词与只选词、API 线路与图片质量、缓存与 Agent 会话储存管理，以及 OpenAI-compatible / Anthropic-compatible Agent 配置；默认使用 DeepSeek `deepseek-chat`，支持 Ask / YOLO、自动上下文压缩开关和 64–384 KiB 阈值
+- **Agent 助手**：所有非设置页面提供可拖动浮动入口；Codex 风格对话实时显示 user/assistant/tool 消息，助手回复安全解析 Markdown；Agent 可读取首页、日/周/月榜、分类漫画的默认前 12 项，页面已加载较多结果时受最近 100 项滑动窗口约束，以及当前漫画详情；Reader 可经确认发送当前页图片给视觉模型。Ask 在副作用前确认，YOLO 自动执行下载、点赞、收藏和屏蔽词修改；图片分享始终单独确认
+- **本地 Agent 历史**：会话按匿名用户/Pica 账号隔离，可恢复、逐个删除或从储存页全部删除
 
 ## 文件结构
 
 ```text
 +-- Shirayuki                 <- App 主体源码
+│   +-- Agent/               <- Agent Domain、Application 与 Infrastructure adapters
 │   +-- Network/             <- API 客户端、DTO、服务、图片加载
 │   +-- Services/            <- 全局状态、Token/凭证存储、阅读进度、主题/语言/图片质量
 │   +-- ViewModels/          <- 各页面视图模型
@@ -69,7 +71,8 @@
 
 - Pica 登录凭据与 LLM API Key 分别保存在独立的 Keychain account 中，不会互相复用。
 - Agent 只有在用户明确确认后才会读取并发送当前阅读页图片。
-- 使用自定义 OpenAI-compatible endpoint 时，应用会显示目标 host 并要求隐私确认；仅发送用户请求和 typed command 所需的最小化、已脱敏上下文与结果，当前阅读页图片仍需另行明确确认。
+- 使用自定义 OpenAI-compatible 或 Anthropic-compatible endpoint 时，应用会显示目标 host 并要求隐私确认；仅发送用户请求和 typed command 所需的最小化、已脱敏上下文与结果，当前阅读页图片仍需另行明确确认。
+- Agent 会话历史保存在本机 Application Support，并按匿名用户/Pica 账号隔离；应用生成的 API Key、Token、图片、data URL 与 capability 不写入历史。用户主动输入的文本会原样保存。
 
 ## 开发说明
 

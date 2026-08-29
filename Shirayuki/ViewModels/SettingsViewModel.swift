@@ -13,14 +13,12 @@ final class SettingsViewModel: ObservableObject {
     @Published var proxyURL = ""
     @Published var editingProxyID: String?
     @Published var proxyMessage: String?
-    @Published var themeMode: AppThemeMode
     @Published var language: AppLanguage
     @Published var imageQuality: AppImageQuality
     @Published var rankDisplay: RankMetadataDisplay
     @Published var rankMaxTagCount: Int
 
     init() {
-        themeMode = AppThemeMode(rawValue: UserDefaults.standard.string(forKey: "app_theme_mode") ?? "") ?? .system
         language = AppLocalization.shared.language
         imageQuality = AppImageQuality.stored
         rankDisplay = AppRankDisplayStore.shared.display
@@ -110,10 +108,6 @@ final class SettingsViewModel: ObservableObject {
         AppRankDisplayStore.shared.setMaxTagCount(clamped)
     }
 
-    func setThemeMode(_ mode: AppThemeMode) {
-        themeMode = mode
-        UserDefaults.standard.set(mode.rawValue, forKey: "app_theme_mode")
-    }
 
     func setLanguage(_ language: AppLanguage) {
         self.language = language

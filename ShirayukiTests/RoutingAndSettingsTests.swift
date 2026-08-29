@@ -42,10 +42,25 @@ final class RoutingAndSettingsTests: XCTestCase {
     }
 
     @MainActor
-    func testAgentSettingsExposeOpenAIAsTheDefaultOption() {
-        let endpoint = LLMSettingsStore.defaultEndpoint.absoluteString
-        XCTAssertEqual(LLMProvider.allCases.first, .openAI)
-        XCTAssertEqual(endpoint, "https://api.openai.com/v1/chat/completions")
+    func testAgentSettingsDefaultToDeepSeekOpenAICompatible() {
+        XCTAssertEqual(LLMProvider.allCases, [.openAICompatible, .anthropicCompatible])
+        XCTAssertEqual(LLMSettingsStore.defaultProvider, .openAICompatible)
+        XCTAssertEqual(LLMSettingsStore.defaultModel, "deepseek-chat")
+        XCTAssertEqual(
+            LLMSettingsStore.defaultEndpoint.absoluteString,
+            "https://api.deepseek.com"
+        )
+    }
+
+    func testAgentResetCopyIsProviderNeutral() {
+        XCTAssertEqual(
+            AppLocalization.text("settings.agent.reset", language: .simplifiedChinese),
+            "重置为默认配置"
+        )
+        XCTAssertEqual(
+            AppLocalization.text("settings.agent.reset", language: .english),
+            "Reset to Defaults"
+        )
     }
 
     func testThirdPartyNoticesDescribeDesignReferences() {

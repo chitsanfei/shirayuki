@@ -2,6 +2,8 @@ import Foundation
 import XCTest
 @testable import Shirayuki
 
+private let agentTestSessionID = UUID()
+
 final class AgentContractsTests: XCTestCase {
     func testFavoriteRedactionContainsOnlyAllowedFields() throws {
         let summary = try makeSummary()
@@ -47,11 +49,11 @@ final class AgentContractsTests: XCTestCase {
     }
  
     func testVisionCapabilityRejectionMapsOnlyImageClientErrors() {
-        XCTAssertTrue(OpenAIClient.isVisionCapabilityRejection(statusCode: 400, containsImage: true))
-        XCTAssertTrue(OpenAIClient.isVisionCapabilityRejection(statusCode: 422, containsImage: true))
-        XCTAssertFalse(OpenAIClient.isVisionCapabilityRejection(statusCode: 401, containsImage: true))
-        XCTAssertFalse(OpenAIClient.isVisionCapabilityRejection(statusCode: 500, containsImage: true))
-        XCTAssertFalse(OpenAIClient.isVisionCapabilityRejection(statusCode: 400, containsImage: false))
+        XCTAssertTrue(OpenAIAgentTransport.isVisionCapabilityRejection(statusCode: 400, containsImage: true))
+        XCTAssertTrue(OpenAIAgentTransport.isVisionCapabilityRejection(statusCode: 422, containsImage: true))
+        XCTAssertFalse(OpenAIAgentTransport.isVisionCapabilityRejection(statusCode: 401, containsImage: true))
+        XCTAssertFalse(OpenAIAgentTransport.isVisionCapabilityRejection(statusCode: 500, containsImage: true))
+        XCTAssertFalse(OpenAIAgentTransport.isVisionCapabilityRejection(statusCode: 400, containsImage: false))
     }
     @MainActor
     func testSelectedTabIsAuthoritativeAndSurfaceRestoresParent() {
@@ -155,62 +157,38 @@ final class AgentContractsTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func testOpenAIMessageEncodesBoundedImageAsDataURL() throws {
-        let data = Data(
-            base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-        )!
-        AgentImageBudget.shared.resetForTesting()
-        let capability = AgentPageCapability(
-            turnID: "encoding",
-            nonce: "nonce",
-            contextFingerprint: "comic|chapter|0",
-            providerKey: "openai|api.example.com|443"
+    func testOpenAIProtocolMessagesEncodeToolCallsResultsImagesAndParallelPolicy() throws {
+        let jpeg = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        let request = AgentTransportRequest(
+            messages: [
+                .assistant(.init(
+                    text: nil,
+                    toolCalls: [.init(id: "call-1", name: "currentContext", arguments: "{}")]
+                )),
+                .tool(callID: "call-1", content: "ok"),
+                .transientImage(callID: "call-2", prompt: "page", jpegData: jpeg)
+            ],
+            tools: AgentToolCatalog().definitions
         )
-        let payload = try AgentImageBudget.shared.prepare(data, capability: capability)
-        let message = OpenAIMessage(
-            role: "user",
-            content: .parts([
-                .text("Describe this page."),
-                .image(payload)
-            ])
-        )
-        let encoded = try JSONEncoder().encode(message)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        let contents = try XCTUnwrap(json["content"] as? [[String: Any]])
-        let imagePart = try XCTUnwrap(contents.last?["image_url"] as? [String: Any])
-        XCTAssertTrue((imagePart["url"] as? String)?.hasPrefix("data:image/jpeg;base64,") == true)
-        XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains("https://"))
-        XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains("file://"))
-        AgentImageBudget.shared.resetForTesting()
+        let encoded = try OpenAIAgentTransport.encodedRequest(model: "model", request: request)
+        let text = String(decoding: encoded, as: UTF8.self)
+
+        XCTAssertTrue(text.contains(#""tool_calls""#))
+        XCTAssertTrue(text.contains(#""role":"tool""#))
+        XCTAssertTrue(text.contains(#""tool_call_id":"call-1""#))
+        XCTAssertTrue(text.contains(#""parallel_tool_calls":false"#))
+        XCTAssertTrue(text.contains("data:image/jpeg;base64,"))
+        XCTAssertFalse(text.contains("file://"))
     }
 
-    @MainActor
-    func testOpenAIRejectsMultipleImagesBeforeNetwork() async throws {
-        let data = Data(
-            base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-        )!
-        AgentImageBudget.shared.resetForTesting()
-        let payload = try AgentImageBudget.shared.prepare(
-            data,
-            capability: AgentPageCapability(
-                turnID: "multiple",
-                nonce: "nonce",
-                contextFingerprint: "comic|chapter|0",
-                providerKey: "openai|api.example.com|443"
-            )
-        )
-        let message = OpenAIMessage(
-            role: "user",
-            content: .parts([.image(payload), .image(payload)])
-        )
-        do {
-            _ = try await OpenAIClient.shared.complete(messages: [message])
-            XCTFail("Expected image validation to reject multiple images")
-        } catch let error as OpenAITransportError {
-            XCTAssertEqual(error.code, .invalidImage)
+    func testOpenAIRejectsMultipleImagesBeforeNetwork() {
+        let jpeg = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        XCTAssertThrowsError(try OpenAIAgentTransport.validateImages([
+            .transientImage(callID: "one", prompt: "", jpegData: jpeg),
+            .transientImage(callID: "two", prompt: "", jpegData: jpeg)
+        ])) { error in
+            XCTAssertEqual((error as? OpenAITransportError)?.code, .invalidImage)
         }
-        AgentImageBudget.shared.resetForTesting()
     }
 
 
@@ -284,15 +262,15 @@ final class AgentContractsTests: XCTestCase {
             sessionIsLoggedIn: { true }
         )
 
-        _ = await service.execute(.favoritePage(page: 1, sort: .dd))
-        let favoriteOpen = await service.execute(.openComic(comicID: favorite.comicID))
+        _ = await service.execute(.favoritePage(page: 1, sort: .dd), sessionID: agentTestSessionID)
+        let favoriteOpen = await service.execute(.openComic(comicID: favorite.comicID), sessionID: agentTestSessionID)
         XCTAssertEqual(favoriteOpen, .openedComic(comicID: favorite.comicID))
 
-        _ = await service.execute(.offlineLibrary)
-        let offlineOpen = await service.execute(.openComic(comicID: offline.comicID))
+        _ = await service.execute(.offlineLibrary, sessionID: agentTestSessionID)
+        let offlineOpen = await service.execute(.openComic(comicID: offline.comicID), sessionID: agentTestSessionID)
         XCTAssertEqual(offlineOpen, .openedComic(comicID: offline.comicID))
 
-        let rawOpen = await service.execute(.openComic(comicID: "not-returned"))
+        let rawOpen = await service.execute(.openComic(comicID: "not-returned"), sessionID: agentTestSessionID)
         XCTAssertEqual(rawOpen, .failure(.invalidIdentifier))
     }
     @MainActor
@@ -315,7 +293,7 @@ final class AgentContractsTests: XCTestCase {
             sessionIsLoggedIn: { true }
         )
 
-        let result = await service.execute(.offlineLibrary)
+        let result = await service.execute(.offlineLibrary, sessionID: agentTestSessionID)
         guard case let .offlineLibrary(cappedItems, totalCount, storageBytes) = result else {
             return XCTFail("Expected offline library result")
         }
@@ -346,20 +324,16 @@ final class AgentContractsTests: XCTestCase {
             sessionIsLoggedIn: { true },
             chapterProvider: { _ in [chapter] }
         )
-        _ = await service.execute(.favoritePage(page: 1, sort: .dd))
+        _ = await service.execute(.favoritePage(page: 1, sort: .dd), sessionID: agentTestSessionID)
 
-        let valid = await service.execute(
-            .startReading(comicID: favorite.comicID, chapterID: chapter.id, pageIndex: 0)
-        )
+        let valid = await service.execute(.startReading(comicID: favorite.comicID, chapterID: chapter.id, pageIndex: 0), sessionID: agentTestSessionID)
         XCTAssertEqual(
             valid,
             .startedReading(comicID: favorite.comicID, chapterID: chapter.id, pageIndex: 0)
         )
         _ = navigation.consumePendingReaderRequest()
 
-        let invalid = await service.execute(
-            .startReading(comicID: favorite.comicID, chapterID: "chapter-unknown", pageIndex: 0)
-        )
+        let invalid = await service.execute(.startReading(comicID: favorite.comicID, chapterID: "chapter-unknown", pageIndex: 0), sessionID: agentTestSessionID)
         XCTAssertEqual(invalid, .failure(.invalidIdentifier))
         XCTAssertNil(navigation.pendingReaderRequest)
     }
@@ -384,11 +358,9 @@ final class AgentContractsTests: XCTestCase {
             sessionIsLoggedIn: { true },
             chapterProvider: { _ in [] }
         )
-        _ = await service.execute(.favoritePage(page: 1, sort: .dd))
+        _ = await service.execute(.favoritePage(page: 1, sort: .dd), sessionID: agentTestSessionID)
 
-        let start = await service.execute(
-            .startReading(comicID: favorite.comicID, chapterID: nil, pageIndex: -1)
-        )
+        let start = await service.execute(.startReading(comicID: favorite.comicID, chapterID: nil, pageIndex: -1), sessionID: agentTestSessionID)
         XCTAssertEqual(start, .failure(.invalidPage))
         XCTAssertNil(navigation.pendingReaderRequest)
     }
@@ -418,11 +390,9 @@ final class AgentContractsTests: XCTestCase {
             downloadProvider: StubAgentDownloadProvider(snapshot: snapshot),
             sessionIsLoggedIn: { true }
         )
-        _ = await service.execute(.favoritePage(page: 1, sort: .dd))
+        _ = await service.execute(.favoritePage(page: 1, sort: .dd), sessionID: agentTestSessionID)
 
-        let result = await service.execute(
-            .cancelDownload(jobID: snapshot.id, commandID: "cancel-1")
-        )
+        let result = await service.execute(.cancelDownload(jobID: snapshot.id, commandID: "cancel-1"), sessionID: agentTestSessionID)
         guard case let .requiresConfirmation(.cancelDownload(jobID, title, completed, total, state)) = result else {
             return XCTFail("Expected structured cancellation preview")
         }

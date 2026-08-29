@@ -18,6 +18,73 @@ final class ShirayukiUITests: XCTestCase {
     }
 
     @MainActor
+    func testAgentSendShowsUserMessageImmediately() throws {
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-agent-failing-provider")
+        app.launch()
+
+        app.buttons["agentFloatingButton"].tap()
+        let input = app.textFields["agentInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 3))
+        input.tap()
+        input.typeText("hello-live")
+        app.buttons.matching(identifier: "agentSendButton").firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["hello-live"].waitForExistence(timeout: 3))
+        attachScreenshot(app, name: "Agent conversation with visible user message")
+    }
+
+    @MainActor
+    func testAgentSettingsUseUnifiedDeepSeekProviderForm() throws {
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-agent-configured-key")
+        app.launch()
+
+        app.buttons["settingsButton"].tap()
+        app.buttons["agentSettingsLink"].tap()
+
+        let model = app.textFields["agentModelField"]
+        let endpoint = app.textFields["agentBaseURLField"]
+        XCTAssertTrue(model.waitForExistence(timeout: 3))
+        XCTAssertEqual(model.value as? String, "deepseek-chat")
+        XCTAssertEqual(
+            endpoint.value as? String,
+            "https://api.deepseek.com"
+        )
+        let apiKey = app.secureTextFields["agentAPIKeyField"]
+        XCTAssertTrue(apiKey.waitForExistence(timeout: 2))
+        XCTAssertTrue((apiKey.value as? String)?.contains("•") == true)
+        XCTAssertTrue(
+            app.buttons.matching(identifier: "agentProviderFormatPicker").firstMatch.exists
+        )
+        XCTAssertTrue(
+            app.buttons.matching(identifier: "agentExecutionModePicker").firstMatch.exists
+        )
+        let toolCallLimit = app.steppers["agentToolCallLimitStepper"]
+        XCTAssertTrue(toolCallLimit.exists)
+        XCTAssertTrue((toolCallLimit.value as? String)?.contains("10") == true)
+        XCTAssertTrue(app.switches["agentAutoCompactToggle"].exists)
+        app.swipeUp()
+        XCTAssertTrue(
+            app.buttons.matching(identifier: "agentAutoCompactThresholdPicker")
+                .firstMatch.waitForExistence(timeout: 2)
+        )
+        app.swipeUp()
+        XCTAssertTrue(
+            app.buttons.matching(identifier: "agentSettingsApplyButton")
+                .firstMatch.waitForExistence(timeout: 2)
+        )
+        XCTAssertTrue(
+            app.buttons.matching(identifier: "agentSettingsClearButton")
+                .firstMatch.waitForExistence(timeout: 2)
+        )
+        XCTAssertTrue(
+            app.buttons.matching(identifier: "agentSettingsResetButton")
+                .firstMatch.waitForExistence(timeout: 2)
+        )
+        attachScreenshot(app, name: "Unified Agent provider settings")
+    }
+
+    @MainActor
     func testSettingsSuppressesAgentButton() throws {
         let app = XCUIApplication()
         app.launch()
@@ -28,6 +95,56 @@ final class ShirayukiUITests: XCTestCase {
         settings.tap()
         XCTAssertTrue(app.otherElements["settingsSheet"].waitForExistence(timeout: 2))
         XCTAssertFalse(app.buttons["agentFloatingButton"].exists)
+    }
+
+    @MainActor
+    func testContentFilterAndAppearanceSettings() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        app.buttons["settingsButton"].tap()
+        let contentFilter = app.buttons["contentFilterSettingsLink"]
+        XCTAssertTrue(contentFilter.waitForExistence(timeout: 3))
+        contentFilter.tap()
+
+        XCTAssertTrue(app.switches["blockedWordAgentConfirmationToggle"].waitForExistence(timeout: 2))
+        app.buttons["addBlockedWordButton"].tap()
+        let editor = app.alerts.textFields.firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 2))
+        editor.typeText("v005-ui-filter")
+        app.buttons.matching(identifier: "saveBlockedWordButton").firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["v005-ui-filter"].waitForExistence(timeout: 2))
+
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let appearance = app.buttons["appearanceSettingsLink"]
+        XCTAssertTrue(appearance.waitForExistence(timeout: 2))
+        appearance.tap()
+        let opacity = app.sliders["agentButtonOpacitySlider"]
+        XCTAssertTrue(opacity.waitForExistence(timeout: 2))
+        opacity.adjust(toNormalizedSliderPosition: 0)
+    }
+
+    @MainActor
+    func testComicActionsAreEqualWidthAcrossScreen() throws {
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-agent-surfaces")
+        app.launch()
+
+        app.buttons["comicActionsButton"].tap()
+        XCTAssertTrue(app.otherElements["comicActionsFixture"].waitForExistence(timeout: 3))
+        let buttons = [
+            app.buttons.matching(identifier: "comicLikeActionButton").firstMatch,
+            app.buttons.matching(identifier: "comicFavoriteActionButton").firstMatch,
+            app.buttons.matching(identifier: "comicDownloadActionButton").firstMatch,
+            app.buttons.matching(identifier: "comicReadActionButton").firstMatch
+        ]
+        XCTAssertTrue(buttons.allSatisfy(\.exists))
+        let widths = buttons.map(\.frame.width)
+        XCTAssertLessThan((widths.max() ?? 0) - (widths.min() ?? 0), 1)
+        let leftMargin = buttons.first?.frame.minX ?? 0
+        let rightMargin = app.frame.maxX - (buttons.last?.frame.maxX ?? 0)
+        XCTAssertEqual(leftMargin, rightMargin, accuracy: 1)
+        attachScreenshot(app, name: "Equal-width comic action buttons")
     }
 
     @MainActor
@@ -45,9 +162,10 @@ final class ShirayukiUITests: XCTestCase {
             let trigger = app.buttons[buttonID]
             XCTAssertTrue(trigger.waitForExistence(timeout: 2))
             trigger.tap()
-            XCTAssertTrue(app.otherElements[sheetID].waitForExistence(timeout: 2))
+            let sheet = app.otherElements[sheetID]
+            XCTAssertTrue(sheet.waitForExistence(timeout: 2))
             XCTAssertEqual(app.buttons.matching(identifier: "agentFloatingButton").count, 1)
-            app.swipeDown()
+            dismiss(sheet)
             XCTAssertTrue(trigger.waitForExistence(timeout: 2))
         }
 
@@ -56,12 +174,28 @@ final class ShirayukiUITests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(identifier: "agentFloatingButton").count, 1)
 
         app.buttons["readerChapterButton"].tap()
-        XCTAssertTrue(app.otherElements["readerChapterSheet"].waitForExistence(timeout: 2))
+        let chapterSheet = app.otherElements["readerChapterSheet"]
+        XCTAssertTrue(chapterSheet.waitForExistence(timeout: 2))
         XCTAssertEqual(app.buttons.matching(identifier: "agentFloatingButton").count, 1)
-        app.swipeDown()
+        dismiss(chapterSheet)
 
         app.buttons["readerSettingsButton"].tap()
         XCTAssertTrue(app.otherElements["readerSettingsSheet"].waitForExistence(timeout: 2))
         XCTAssertEqual(app.buttons.matching(identifier: "agentFloatingButton").count, 1)
+    }
+
+    private func attachScreenshot(_ app: XCUIApplication, name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    private func dismiss(_ sheet: XCUIElement) {
+        let start = sheet.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.03))
+        let end = sheet.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85))
+        start.press(forDuration: 0.1, thenDragTo: end)
+        XCTAssertFalse(sheet.waitForExistence(timeout: 2))
     }
 }

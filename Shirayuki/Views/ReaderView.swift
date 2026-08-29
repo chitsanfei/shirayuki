@@ -12,6 +12,7 @@ struct ReaderView: View {
     @StateObject var viewModel: ReaderViewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var agentRuntime: AgentRuntime
     @State private var showChapterSheet = false
     @State private var showReaderSettings = false
     
@@ -76,7 +77,7 @@ struct ReaderView: View {
                     )
             }
             .task {
-                AgentCommandService.shared.registerReaderSurface(viewModel)
+                agentRuntime.registerReaderSurface(viewModel)
                 viewModel.startInitialLoadIfNeeded()
             }
             .onChange(of: scenePhase) { _, phase in
@@ -90,9 +91,10 @@ struct ReaderView: View {
                 }
             }
             .onDisappear {
-                AgentCommandService.shared.unregisterReaderSurface(viewModel)
+                agentRuntime.unregisterReaderSurface(viewModel)
                 viewModel.cancelOngoingWork()
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("readerSurface")
         }
         .agentSurfaceHost(context: readerContext)
@@ -408,6 +410,8 @@ struct ZoomableComicImage: View {
 
 /// Reader header containing navigation and settings controls.
 struct ReaderTopToolbar: View {
+    @EnvironmentObject private var appearance: AppAppearanceStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var viewModel: ReaderViewModel
     let topInset: CGFloat
     let isVisible: Bool
@@ -422,6 +426,8 @@ struct ReaderTopToolbar: View {
     }
     
     var body: some View {
+        let profile = appearance.motionProfile(systemReduceMotion: reduceMotion)
+        let usesSpatialMotion = profile.mode == .standard
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 ReaderToolbarIconButton(systemImage: "chevron.left", action: onBack)
@@ -455,7 +461,7 @@ struct ReaderTopToolbar: View {
                     } label: {
                         ReaderToolbarOrb(systemImage: "book.pages")
                     }
-                    
+
                     ReaderToolbarIconButton(systemImage: "gearshape.fill", action: onSettings)
                         .accessibilityIdentifier("readerSettingsButton")
                 }
@@ -463,24 +469,28 @@ struct ReaderTopToolbar: View {
             .padding(.horizontal, 16)
             .padding(.top, topInset + 4)
             .frame(height: topInset + ReaderLayout.topToolbarHeight, alignment: .top)
-            
+
             Spacer()
         }
-        .offset(y: isVisible ? 0 : -(topInset + ReaderLayout.topToolbarHeight + 16))
+        .offset(y: isVisible || !usesSpatialMotion ? 0 : -(topInset + ReaderLayout.topToolbarHeight + 16))
         .opacity(isVisible ? 1 : 0)
-        .scaleEffect(isVisible ? 1 : 0.96, anchor: .top)
-        .animation(.interpolatingSpring(stiffness: 230, damping: 25), value: isVisible)
+        .scaleEffect(isVisible || !usesSpatialMotion ? 1 : 0.96, anchor: .top)
+        .animation(profile.readerToolbarAnimation, value: isVisible)
     }
 }
 
 /// Reader footer containing progress, chapter, and playback controls.
 struct ReaderBottomToolbar: View {
+    @EnvironmentObject private var appearance: AppAppearanceStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var viewModel: ReaderViewModel
     let bottomInset: CGFloat
     let isVisible: Bool
     let onChapterTap: () -> Void
     
     var body: some View {
+        let profile = appearance.motionProfile(systemReduceMotion: reduceMotion)
+        let usesSpatialMotion = profile.mode == .standard
         VStack {
             Spacer()
             
@@ -559,10 +569,10 @@ struct ReaderBottomToolbar: View {
                 .padding(.bottom, bottomInset + 12)
             }
         }
-        .offset(y: isVisible ? 0 : ReaderLayout.bottomToolbarHeight)
+        .offset(y: isVisible || !usesSpatialMotion ? 0 : ReaderLayout.bottomToolbarHeight)
         .opacity(isVisible ? 1 : 0)
-        .scaleEffect(isVisible ? 1 : 0.96, anchor: .bottom)
-        .animation(.interpolatingSpring(stiffness: 230, damping: 25), value: isVisible)
+        .scaleEffect(isVisible || !usesSpatialMotion ? 1 : 0.96, anchor: .bottom)
+        .animation(profile.readerToolbarAnimation, value: isVisible)
     }
 }
 
@@ -607,6 +617,7 @@ struct ChapterListSheet: View {
                 }
             }
         }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("readerChapterSheet")
     }
 }
@@ -715,6 +726,7 @@ struct ReaderSettingsSheet: View {
                 }
             }
         }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("readerSettingsSheet")
     }
 }

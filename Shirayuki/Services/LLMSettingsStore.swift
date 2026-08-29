@@ -1,10 +1,17 @@
-import Foundation
 import Combine
+import Foundation
 
-/// LLM transports supported by the internal Agent client.
+/// Wire formats supported by Agent transports.
 nonisolated enum LLMProvider: String, CaseIterable, Identifiable, Sendable {
-    case openAI = "openai"
     case openAICompatible = "openai-compatible"
+    case anthropicCompatible = "anthropic-compatible"
+
+    var id: String { rawValue }
+}
+
+nonisolated enum AgentExecutionMode: String, CaseIterable, Identifiable, Sendable {
+    case ask
+    case yolo
 
     var id: String { rawValue }
 }
@@ -14,39 +21,93 @@ nonisolated struct LLMConfiguration: Equatable, Sendable {
     let provider: LLMProvider
     let model: String
     let baseURL: URL
+    let requestURL: URL
     let keyAccount: String
 }
 
-/// Persists LLM metadata in UserDefaults and API keys in a provider-scoped Keychain account.
+nonisolated enum LLMSettingsApplyResult: Equatable, Sendable {
+    case applied
+    case invalid
+    case privacyConfirmationRequired(host: String)
+}
+
+/// Persists LLM metadata in UserDefaults and API keys in provider-scoped Keychain accounts.
 @MainActor
 final class LLMSettingsStore: ObservableObject {
     static let shared = LLMSettingsStore()
 
+    static let defaultProvider = LLMProvider.openAICompatible
+    static let defaultModel = "deepseek-chat"
+    nonisolated static let defaultAutoCompactEnabled = true
+    nonisolated static let defaultAutoCompactThresholdKiB = 128
+    nonisolated static let compactThresholdOptionsKiB = [64, 128, 256, 384]
+    nonisolated static let defaultToolCallLimit = 10
+    nonisolated static let maximumToolCallLimit = 20
+    private static let defaultEndpointString = "https://api.deepseek.com"
+
     private static let providerKey = "llm_provider"
     private static let modelKey = "llm_model"
     private static let baseURLKey = "llm_base_url"
+    private static let executionModeKey = "agent_execution_mode"
+    private static let autoCompactEnabledKey = "agent_auto_compact_enabled"
+    private static let autoCompactThresholdKey = "agent_auto_compact_threshold_kib"
+    private static let toolCallLimitKey = "agent_tool_call_limit"
     private static let customEndpointConfirmedKey = "llm_custom_endpoint_confirmed"
-    private static let officialEndpoint = "https://api.openai.com/v1/chat/completions"
 
     @Published private(set) var provider: LLMProvider
     @Published private(set) var model: String
     @Published private(set) var baseURLString: String
     @Published private(set) var customEndpointConfirmed: Bool
+    @Published private(set) var executionMode: AgentExecutionMode
+    @Published private(set) var autoCompactEnabled: Bool
+    @Published private(set) var autoCompactThresholdKiB: Int
+    @Published private(set) var toolCallLimit: Int
 
-    private init(defaults: UserDefaults = .standard) {
+    private let defaults: UserDefaults
+    private var volatileAPIKeys: [String: String] = [:]
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         let storedProvider = defaults.string(forKey: Self.providerKey)
-            .flatMap(LLMProvider.init(rawValue:))
-        provider = storedProvider ?? .openAI
-        model = defaults.string(forKey: Self.modelKey) ?? ""
-        baseURLString = defaults.string(forKey: Self.baseURLKey) ?? Self.officialEndpoint
-        customEndpointConfirmed = defaults.bool(forKey: Self.customEndpointConfirmedKey)
+        switch storedProvider {
+        case LLMProvider.anthropicCompatible.rawValue:
+            provider = .anthropicCompatible
+        case LLMProvider.openAICompatible.rawValue, "openai":
+            provider = .openAICompatible
+        default:
+            provider = Self.defaultProvider
+        }
+        executionMode = defaults.string(forKey: Self.executionModeKey)
+            .flatMap(AgentExecutionMode.init(rawValue:)) ?? .ask
+        autoCompactEnabled = defaults.object(forKey: Self.autoCompactEnabledKey) == nil
+            ? Self.defaultAutoCompactEnabled
+            : defaults.bool(forKey: Self.autoCompactEnabledKey)
+        autoCompactThresholdKiB = Self.normalizedCompactThreshold(
+            defaults.object(forKey: Self.autoCompactThresholdKey) as? Int
+                ?? Self.defaultAutoCompactThresholdKiB
+        )
+        toolCallLimit = Self.normalizedToolCallLimit(
+            defaults.object(forKey: Self.toolCallLimitKey) as? Int
+                ?? Self.defaultToolCallLimit
+        )
+
+        let storedModel = defaults.string(forKey: Self.modelKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        model = storedModel.flatMap { $0.isEmpty ? nil : $0 } ?? Self.defaultModel
+
+        let storedURL = defaults.string(forKey: Self.baseURLKey)
+        let resolvedURL = Self.validEndpoint(storedURL)?.absoluteString
+            ?? Self.defaultEndpoint.absoluteString
+        baseURLString = resolvedURL
+        customEndpointConfirmed = resolvedURL == Self.defaultEndpoint.absoluteString
+            || defaults.bool(forKey: Self.customEndpointConfirmedKey)
     }
 
     static var defaultEndpoint: URL {
-        URL(string: officialEndpoint)!
+        URL(string: defaultEndpointString)!
     }
 
-    /// Validates an HTTPS endpoint without accepting credentials, query, or fragments.
+    /// Validates an HTTPS endpoint without credentials, query, or fragment.
     nonisolated static func validEndpoint(_ rawValue: String?) -> URL? {
         guard let rawValue else { return nil }
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -63,115 +124,159 @@ final class LLMSettingsStore: ObservableObject {
         return url
     }
 
-    /// Produces a stable provider/host/port-scoped Keychain account identifier.
+    nonisolated static func requestEndpoint(provider: LLMProvider, baseURL: URL) -> URL {
+        let path = baseURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        switch provider {
+        case .openAICompatible:
+            guard !path.hasSuffix("chat/completions") else { return baseURL }
+            return baseURL
+                .appendingPathComponent("chat")
+                .appendingPathComponent("completions")
+        case .anthropicCompatible:
+            guard !path.hasSuffix("messages") else { return baseURL }
+            if path.isEmpty {
+                return baseURL
+                    .appendingPathComponent("v1")
+                    .appendingPathComponent("messages")
+            }
+            return baseURL.appendingPathComponent("messages")
+        }
+    }
+
     nonisolated static func keyAccount(provider: LLMProvider, endpoint: URL) -> String {
         let host = endpoint.host?.lowercased() ?? "unknown"
         let port = endpoint.port ?? 443
         let hostPart = host.unicodeScalars.map { scalar in
             let value = scalar.value
-            return scalar.isASCII && (value == 45 || value == 46 || value == 95 || value >= 48 && value <= 57 || value >= 65 && value <= 90 || value >= 97 && value <= 122)
-                ? String(scalar)
-                : "_"
+            return scalar.isASCII && (
+                value == 45 || value == 46 || value == 95
+                    || value >= 48 && value <= 57
+                    || value >= 65 && value <= 90
+                    || value >= 97 && value <= 122
+            ) ? String(scalar) : "_"
         }.joined()
         return "llm_\(provider.rawValue)_\(hostPart)_\(port)_api_key"
     }
 
-    var endpoint: URL? {
-        Self.validEndpoint(baseURLString)
-    }
+    var endpoint: URL? { Self.validEndpoint(baseURLString) }
 
     var configuration: LLMConfiguration? {
         guard !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let endpoint,
-              provider == .openAI || customEndpointConfirmed else {
+              endpoint == Self.defaultEndpoint || customEndpointConfirmed else {
             return nil
         }
         return LLMConfiguration(
             provider: provider,
             model: model.trimmingCharacters(in: .whitespacesAndNewlines),
             baseURL: endpoint,
+            requestURL: Self.requestEndpoint(provider: provider, baseURL: endpoint),
             keyAccount: Self.keyAccount(provider: provider, endpoint: endpoint)
         )
     }
 
     var hasAPIKey: Bool {
-        guard let endpoint else { return false }
-        return KeychainTokenStore.readValue(account: Self.keyAccount(provider: provider, endpoint: endpoint)) != nil
-    }
-    var apiKeyLastFour: String? {
-        guard let endpoint,
-              let key = KeychainTokenStore.readValue(account: Self.keyAccount(provider: provider, endpoint: endpoint)),
-              !key.isEmpty else { return nil }
-        guard key.count > 4 else { return key }
-        return String(key.suffix(4))
+        readAPIKey()?.isEmpty == false
     }
 
-    func setProvider(_ provider: LLMProvider) {
-        self.provider = provider
-        UserDefaults.standard.set(provider.rawValue, forKey: Self.providerKey)
-        if provider == .openAI {
-            baseURLString = Self.officialEndpoint
-            customEndpointConfirmed = true
-            UserDefaults.standard.set(baseURLString, forKey: Self.baseURLKey)
-            UserDefaults.standard.set(true, forKey: Self.customEndpointConfirmedKey)
-        } else {
-            customEndpointConfirmed = false
-            UserDefaults.standard.set(false, forKey: Self.customEndpointConfirmedKey)
+    var compactionPolicy: AgentContextCompactionPolicy {
+        AgentContextCompactionPolicy(
+            enabled: autoCompactEnabled,
+            thresholdBytes: autoCompactThresholdKiB * 1024,
+            preservedRecentTurns: 4
+        )
+    }
+
+
+    func apply(
+        provider: LLMProvider,
+        model: String,
+        baseURL: String,
+        apiKey: String,
+        executionMode: AgentExecutionMode = .ask,
+        autoCompactEnabled: Bool = LLMSettingsStore.defaultAutoCompactEnabled,
+        autoCompactThresholdKiB: Int = LLMSettingsStore.defaultAutoCompactThresholdKiB,
+        toolCallLimit: Int = LLMSettingsStore.defaultToolCallLimit,
+        privacyConfirmed: Bool = false
+    ) -> LLMSettingsApplyResult {
+        let model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !model.isEmpty, let endpoint = Self.validEndpoint(baseURL) else { return .invalid }
+
+        let sameConfirmedEndpoint = endpoint == self.endpoint && customEndpointConfirmed
+        let isDefaultEndpoint = endpoint == Self.defaultEndpoint
+        guard isDefaultEndpoint || sameConfirmedEndpoint || privacyConfirmed else {
+            return .privacyConfirmationRequired(host: endpoint.host ?? endpoint.absoluteString)
         }
-    }
 
-    /// Stores a non-empty model; empty input is rejected so requests cannot use a fake default.
-    @discardableResult
-    func setModel(_ model: String) -> Bool {
-        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return false }
-        self.model = trimmed
-        UserDefaults.standard.set(trimmed, forKey: Self.modelKey)
-        return true
-    }
+        self.provider = provider
+        self.model = model
+        self.baseURLString = endpoint.absoluteString
+        self.customEndpointConfirmed = isDefaultEndpoint || sameConfirmedEndpoint || privacyConfirmed
+        self.executionMode = executionMode
+        self.autoCompactEnabled = autoCompactEnabled
+        self.autoCompactThresholdKiB = Self.normalizedCompactThreshold(
+            autoCompactThresholdKiB
+        )
+        self.toolCallLimit = Self.normalizedToolCallLimit(toolCallLimit)
+        defaults.set(provider.rawValue, forKey: Self.providerKey)
+        defaults.set(model, forKey: Self.modelKey)
+        defaults.set(baseURLString, forKey: Self.baseURLKey)
+        defaults.set(customEndpointConfirmed, forKey: Self.customEndpointConfirmedKey)
+        defaults.set(executionMode.rawValue, forKey: Self.executionModeKey)
+        defaults.set(autoCompactEnabled, forKey: Self.autoCompactEnabledKey)
+        defaults.set(self.autoCompactThresholdKiB, forKey: Self.autoCompactThresholdKey)
+        defaults.set(self.toolCallLimit, forKey: Self.toolCallLimitKey)
 
-    /// Sets an endpoint after HTTPS validation and, for custom hosts, explicit privacy confirmation.
-    @discardableResult
-    func setBaseURL(_ rawValue: String, privacyConfirmed: Bool = false) -> Bool {
-        guard let url = Self.validEndpoint(rawValue) else { return false }
-        let isOfficial = url.absoluteString == Self.officialEndpoint
-        guard isOfficial || privacyConfirmed else { return false }
-        baseURLString = url.absoluteString
-        customEndpointConfirmed = isOfficial || privacyConfirmed
-        UserDefaults.standard.set(baseURLString, forKey: Self.baseURLKey)
-        UserDefaults.standard.set(customEndpointConfirmed, forKey: Self.customEndpointConfirmedKey)
-        return true
-    }
-
-    @discardableResult
-    func saveAPIKey(_ key: String) -> Bool {
-        guard let configuration,
-              !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
-        KeychainTokenStore.saveValue(key, account: configuration.keyAccount)
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !key.isEmpty {
+            let account = Self.keyAccount(provider: provider, endpoint: endpoint)
+            volatileAPIKeys[account] = key
+            KeychainTokenStore.saveValue(key, account: account)
+        }
         objectWillChange.send()
-        return true
+        return .applied
     }
 
     func clearAPIKey() {
         guard let endpoint else { return }
-        KeychainTokenStore.deleteValue(account: Self.keyAccount(provider: provider, endpoint: endpoint))
+        let account = Self.keyAccount(provider: provider, endpoint: endpoint)
+        volatileAPIKeys[account] = nil
+        KeychainTokenStore.deleteValue(account: account)
         objectWillChange.send()
     }
 
-    /// Returns the secret only to the isolated OpenAI client after full configuration validation.
     func readAPIKey() -> String? {
         guard let configuration else { return nil }
-        return KeychainTokenStore.readValue(account: configuration.keyAccount)
+        return volatileAPIKeys[configuration.keyAccount]
+            ?? KeychainTokenStore.readValue(account: configuration.keyAccount)
     }
 
-    func resetToOfficialEndpoint() {
-        provider = .openAI
-        model = ""
-        baseURLString = Self.officialEndpoint
+    func resetToDefaults() {
+        provider = Self.defaultProvider
+        model = Self.defaultModel
+        baseURLString = Self.defaultEndpoint.absoluteString
         customEndpointConfirmed = true
-        UserDefaults.standard.set(provider.rawValue, forKey: Self.providerKey)
-        UserDefaults.standard.set(model, forKey: Self.modelKey)
-        UserDefaults.standard.set(baseURLString, forKey: Self.baseURLKey)
-        UserDefaults.standard.set(true, forKey: Self.customEndpointConfirmedKey)
+        executionMode = .ask
+        autoCompactEnabled = Self.defaultAutoCompactEnabled
+        autoCompactThresholdKiB = Self.defaultAutoCompactThresholdKiB
+        toolCallLimit = Self.defaultToolCallLimit
+        defaults.set(provider.rawValue, forKey: Self.providerKey)
+        defaults.set(model, forKey: Self.modelKey)
+        defaults.set(baseURLString, forKey: Self.baseURLKey)
+        defaults.set(true, forKey: Self.customEndpointConfirmedKey)
+        defaults.set(executionMode.rawValue, forKey: Self.executionModeKey)
+        defaults.set(autoCompactEnabled, forKey: Self.autoCompactEnabledKey)
+        defaults.set(autoCompactThresholdKiB, forKey: Self.autoCompactThresholdKey)
+        defaults.set(toolCallLimit, forKey: Self.toolCallLimitKey)
+    }
+
+
+    nonisolated private static func normalizedToolCallLimit(_ value: Int) -> Int {
+        min(max(value, 1), maximumToolCallLimit)
+    }
+    private static func normalizedCompactThreshold(_ value: Int) -> Int {
+        compactThresholdOptionsKiB.min {
+            abs($0 - value) < abs($1 - value)
+        } ?? defaultAutoCompactThresholdKiB
     }
 }

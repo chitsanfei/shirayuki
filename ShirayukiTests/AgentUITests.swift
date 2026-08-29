@@ -30,49 +30,45 @@ final class AgentUITests: XCTestCase {
         XCTAssertEqual(position.y, 380)
     }
 
-    func testToolCallParserProducesTypedOpenComicCommand() {
-        let call = OpenAIToolCall(
+    func testToolCallParserProducesTypedOpenComicCommand() throws {
+        let parsed = try AgentToolCatalog().parse(.init(
             id: "call-1",
-            function: OpenAIFunctionCall(
-                name: "openComic",
-                arguments: #"{"comic_id":"comic-42"}"#
-            )
-        )
+            name: "openComic",
+            arguments: #"{"comic_id":"comic-42"}"#
+        )).get()
 
-        XCTAssertEqual(
-            AgentToolCallParser.command(from: call),
-            .openComic(comicID: "comic-42")
-        )
+        XCTAssertEqual(parsed.command, .openComic(comicID: "comic-42"))
     }
 
     func testToolCallParserRejectsUnknownAndMalformedCalls() {
-        let unknown = OpenAIToolCall(
-            id: "call-2",
-            function: OpenAIFunctionCall(name: "rawHTTP", arguments: #"{"url":"https://example.com"}"#)
-        )
-        let malformed = OpenAIToolCall(
-            id: "call-3",
-            function: OpenAIFunctionCall(name: "openComic", arguments: "not-json")
-        )
-
-        XCTAssertNil(AgentToolCallParser.command(from: unknown))
-        XCTAssertNil(AgentToolCallParser.command(from: malformed))
-    }
- 
-    func testToolCallParserDefaultsOnlyMissingSortAndRejectsInvalidSort() {
-        let missing = OpenAIToolCall(
-            id: "call-missing-sort",
-            function: OpenAIFunctionCall(name: "search", arguments: #"{"keyword":"comic"}"#)
-        )
-        let invalid = OpenAIToolCall(
-            id: "call-invalid-sort",
-            function: OpenAIFunctionCall(name: "search", arguments: #"{"keyword":"comic","sort":"not-a-sort"}"#)
-        )
-
+        let catalog = AgentToolCatalog()
         XCTAssertEqual(
-            AgentToolCallParser.command(from: missing),
+            catalog.parse(.init(id: "call-2", name: "rawHTTP", arguments: #"{"url":"https://example.com"}"#)),
+            .failure(.unknownTool)
+        )
+        XCTAssertEqual(
+            catalog.parse(.init(id: "call-3", name: "openComic", arguments: "not-json")),
+            .failure(.invalidJSON)
+        )
+    }
+
+    func testToolCallParserDefaultsOnlyMissingSortAndRejectsInvalidSort() throws {
+        let catalog = AgentToolCatalog()
+        XCTAssertEqual(
+            try catalog.parse(.init(
+                id: "call-missing-sort",
+                name: "search",
+                arguments: #"{"keyword":"comic"}"#
+            )).get().command,
             .search(keyword: "comic", sort: .dd)
         )
-        XCTAssertNil(AgentToolCallParser.command(from: invalid))
+        XCTAssertEqual(
+            catalog.parse(.init(
+                id: "call-invalid-sort",
+                name: "search",
+                arguments: #"{"keyword":"comic","sort":"not-a-sort"}"#
+            )),
+            .failure(.invalidValue)
+        )
     }
 }

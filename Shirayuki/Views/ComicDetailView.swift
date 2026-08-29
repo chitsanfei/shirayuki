@@ -17,6 +17,9 @@ struct ComicDetailView: View {
     @StateObject private var viewModel: ComicDetailViewModel
     @ObservedObject private var localization = AppLocalization.shared
     @EnvironmentObject private var navigation: AppNavigationCoordinator
+    @EnvironmentObject private var blockedWords: UserDefaultsBlockedWordRepository
+    @EnvironmentObject private var agentPageContent: AgentPageContentStore
+    @State private var pageContentOwnerID = UUID()
     @State private var readerPresentation: ReaderPresentation?
     @State private var routedComicId: String?
     @State private var showAllChapters = false
@@ -112,6 +115,7 @@ struct ComicDetailView: View {
         .task(id: comicId) {
             await viewModel.loadDetail()
             consumeAgentReaderRoute()
+            publishAgentPageContent()
         }
         .agentPageContext(.detail(comicID: comicId))
         .onChange(of: navigation.pendingComicID) { _, _ in
@@ -122,8 +126,41 @@ struct ComicDetailView: View {
         .onChange(of: navigation.pendingReaderRequest) { _, _ in
             consumeAgentReaderRoute()
         }
+        .onChange(of: viewModel.isLiked) { _, _ in
+            publishAgentPageContent()
+        }
+        .onChange(of: viewModel.isFavorited) { _, _ in
+            publishAgentPageContent()
+        }
+        .onChange(of: viewModel.recommendations.map(\.id)) { _, _ in
+            publishAgentPageContent()
+        }
+        .onChange(of: blockedWords.currentSnapshot.revision) { _, _ in
+            publishAgentPageContent()
+        }
+        .onDisappear {
+            agentPageContent.clear(ownerID: pageContentOwnerID)
+        }
     }
     
+    private func publishAgentPageContent() {
+        guard let comic = viewModel.comic else {
+            agentPageContent.publish(.unavailable, ownerID: pageContentOwnerID)
+            return
+        }
+        agentPageContent.publish(
+            PicaAgentAdapters.detailContent(
+                comic,
+                recommendations: viewModel.visibleRecommendations(
+                    for: blockedWords.currentSnapshot
+                ),
+                isLiked: viewModel.isLiked,
+                isFavorited: viewModel.isFavorited
+            ),
+            ownerID: pageContentOwnerID
+        )
+    }
+
     private func consumeAgentReaderRoute() {
         guard let request = navigation.pendingReaderRequest,
               request.comicID == comicId,
@@ -362,7 +399,10 @@ struct ComicDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(localization.text("detail.section.actions"))
 
-            HStack(alignment: .top, spacing: 8) {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 4),
+                spacing: 0
+            ) {
                 Button {
                     Task { await viewModel.toggleLike() }
                 } label: {
@@ -374,6 +414,9 @@ struct ComicDetailView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("comicLikeActionButton")
 
                 Button {
                     Task { await viewModel.toggleFavorite() }
@@ -386,6 +429,9 @@ struct ComicDetailView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("comicFavoriteActionButton")
 
                 Button {
                     showDownloadOptions = true
@@ -422,6 +468,9 @@ struct ComicDetailView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("comicDownloadActionButton")
                 .disabled(!comic.allowDownload || isDownloading)
                 .opacity(comic.allowDownload ? 1 : 0.45)
 
@@ -446,10 +495,14 @@ struct ComicDetailView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("comicReadActionButton")
                 .disabled(viewModel.chapters.isEmpty)
                 .opacity(viewModel.chapters.isEmpty ? 0.45 : 1)
             }
-            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 8)
         }
     }
 
@@ -603,11 +656,11 @@ struct ComicDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(localization.text("detail.section.recommendations"))
             
-            if viewModel.recommendations.isEmpty && viewModel.isLoading {
+            if visibleRecommendations.isEmpty && viewModel.isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 180)
                     .padding(.horizontal, 16)
-            } else if viewModel.recommendations.isEmpty {
+            } else if visibleRecommendations.isEmpty {
                 Text(localization.text("detail.recommendations.empty"))
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
@@ -615,7 +668,7 @@ struct ComicDetailView: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
-                        ForEach(viewModel.recommendations) { comic in
+                        ForEach(visibleRecommendations) { comic in
                             VStack(alignment: .leading, spacing: 8) {
                                 ComicCoverImage(url: comic.thumb.url)
                                     .aspectRatio(2 / 3, contentMode: .fill)
@@ -648,6 +701,10 @@ struct ComicDetailView: View {
         }
     }
     
+    private var visibleRecommendations: [ComicSummary] {
+        viewModel.visibleRecommendations(for: blockedWords.currentSnapshot)
+    }
+
     private func sectionTitle(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 20, weight: .bold))
@@ -754,11 +811,11 @@ private struct ActionButtonLabel: View {
     let tint: Color
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             ZStack {
                 Circle()
                     .fill(isFilled ? Color.white.opacity(0.18) : tint.opacity(0.12))
-                    .frame(width: 42, height: 42)
+                    .frame(width: 44, height: 44)
 
                 switch icon {
                 case .system(let name):
@@ -767,12 +824,12 @@ private struct ActionButtonLabel: View {
                 case .progress(let rawProgress):
                     Circle()
                         .stroke(tint.opacity(0.2), lineWidth: 3)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 36, height: 36)
                     Circle()
                         .trim(from: 0, to: min(max(rawProgress, 0), 1))
                         .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         .rotationEffect(.degrees(-90))
-                        .frame(width: 34, height: 34)
+                        .frame(width: 36, height: 36)
                     Image(systemName: "arrow.down")
                         .font(.system(size: 13, weight: .bold))
                 case .indeterminate:
@@ -789,13 +846,82 @@ private struct ActionButtonLabel: View {
                 .minimumScaleFactor(0.8)
         }
         .foregroundStyle(isFilled ? .white : tint)
-        .padding(4)
-        .frame(maxWidth: .infinity)
-        .aspectRatio(1, contentMode: .fit)
+        .padding(6)
+        .frame(maxWidth: .infinity, minHeight: 104)
         .background(isFilled ? tint : tint.opacity(0.11))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
+
+#if DEBUG
+struct ComicActionUITestSurface: View {
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Comic actions")
+                    .font(.headline)
+
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 4),
+                    spacing: 0
+                ) {
+                    fixtureButton(
+                        id: "comicLikeActionButton",
+                        icon: "heart",
+                        title: "Like",
+                        tint: .pink
+                    )
+                    fixtureButton(
+                        id: "comicFavoriteActionButton",
+                        icon: "star",
+                        title: "Favorite",
+                        tint: .yellow
+                    )
+                    fixtureButton(
+                        id: "comicDownloadActionButton",
+                        icon: "arrow.down",
+                        title: "Download",
+                        tint: .orange
+                    )
+                    fixtureButton(
+                        id: "comicReadActionButton",
+                        icon: "book.fill",
+                        title: "Read",
+                        tint: .blue
+                    )
+                }
+                .frame(maxWidth: .infinity)
+
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 16)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("comicActionsFixture")
+    }
+
+    private func fixtureButton(
+        id: String,
+        icon: String,
+        title: String,
+        tint: Color
+    ) -> some View {
+        Button {} label: {
+            ActionButtonLabel(
+                icon: .system(icon),
+                title: title,
+                isFilled: false,
+                tint: tint
+            )
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier(id)
+    }
+}
+#endif
 
 private struct MetaChip: View {
     let icon: String
