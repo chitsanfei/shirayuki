@@ -1,3 +1,5 @@
+
+
 <div align="center">
     <hr>
     <img src="./.assets/icon.png" height="200" alt="Shirayuki">
@@ -47,6 +49,7 @@
 +-- Shirayuki                 <- App 主体源码
 │   +-- Agent/               <- Agent Domain、Application 与 Infrastructure adapters
 │   +-- Network/             <- API 客户端、DTO、服务、图片加载
+│   +-- NetworkRoutes.json   <- API 线路配置资源
 │   +-- Services/            <- 全局状态、Token/凭证存储、阅读进度、主题/语言/图片质量
 │   +-- ViewModels/          <- 各页面视图模型
 │   +-- Views/               <- SwiftUI 视图与自定义组件
