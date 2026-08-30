@@ -4,7 +4,7 @@ import FoundationNetworking
 #endif
 
 /// Anthropic Messages API-compatible transport.
-nonisolated actor AnthropicAgentTransport: AgentLLMTransport {
+actor AnthropicAgentTransport: AgentLLMTransport {
     private let configuration: AgentLLMTransportConfiguration
 
     init(configuration: AgentLLMTransportConfiguration) {

@@ -32,7 +32,7 @@ nonisolated enum AgentLoopOutcome: Sendable {
     case failed(AgentSession, code: String)
 }
 
-nonisolated actor AgentLoop {
+actor AgentLoop {
     static let maximumModelSteps = 24
 
     private let transport: any AgentLLMTransport

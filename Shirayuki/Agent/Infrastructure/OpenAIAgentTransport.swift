@@ -9,7 +9,7 @@ nonisolated struct AgentLLMTransportConfiguration: Equatable, Sendable {
     let apiKey: String
 }
 
-nonisolated actor OpenAIAgentTransport: AgentLLMTransport {
+actor OpenAIAgentTransport: AgentLLMTransport {
     private enum WireFormat {
         case chatCompletions
         case responses

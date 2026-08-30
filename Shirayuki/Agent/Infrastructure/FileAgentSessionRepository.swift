@@ -5,7 +5,7 @@ nonisolated enum AgentSessionRepositoryError: Error, Equatable, Sendable {
     case invalidStore
 }
 
-nonisolated actor FileAgentSessionRepository: AgentSessionRepository {
+actor FileAgentSessionRepository: AgentSessionRepository {
     private struct Envelope: Codable {
         let version: Int
         var sessions: [AgentSession]
