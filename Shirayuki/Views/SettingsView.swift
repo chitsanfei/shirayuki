@@ -213,6 +213,7 @@ struct BlockedWordsSettingsView: View {
             Button(localization.text("common.apply")) {
                 Task { await saveEditor() }
             }
+            .accessibilityIdentifier("saveBlockedWordButton")
         }
         .alert(item: $dangerAction) { action in
             Alert(
