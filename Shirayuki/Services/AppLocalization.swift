@@ -1,11 +1,6 @@
 import Foundation
 import Combine
 
-/// Build metadata displayed by the About screen.
-nonisolated struct AppMetadata {
-    static let version = "0.1.0"
-}
-
 /// Languages supported by the in-process localization catalog.
 nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
     case simplifiedChinese = "zh-Hans"
@@ -797,6 +792,564 @@ nonisolated private enum AppLocalizationCatalog {
             .english: "Picacomic Official",
             .japanese: "Picacomic 公式"
         ],
+        "agent.button.open": [
+            .simplifiedChinese: "打开 Agent",
+            .traditionalChinese: "開啟 Agent",
+            .english: "Open Agent",
+            .japanese: "Agentを開く"
+        ],
+        "agent.input.placeholder": [
+            .simplifiedChinese: "输入消息…",
+            .traditionalChinese: "輸入訊息…",
+            .english: "Enter a message…",
+            .japanese: "メッセージを入力…"
+        ],
+        "agent.send": [
+            .simplifiedChinese: "发送",
+            .traditionalChinese: "傳送",
+            .english: "Send",
+            .japanese: "送信"
+        ],
+        "agent.stop": [
+            .simplifiedChinese: "停止生成",
+            .traditionalChinese: "停止生成",
+            .english: "Stop Generating",
+            .japanese: "生成を停止"
+        ],
+        "agent.close": [
+            .simplifiedChinese: "关闭 Agent",
+            .traditionalChinese: "關閉 Agent",
+            .english: "Close Agent",
+            .japanese: "Agentを閉じる"
+        ],
+        "agent.loading": [
+            .simplifiedChinese: "正在生成…",
+            .traditionalChinese: "正在生成…",
+            .english: "Generating…",
+            .japanese: "生成中…"
+        ],
+        "agent.state.loginRequired": [
+            .simplifiedChinese: "请先登录后使用此功能。",
+            .traditionalChinese: "請先登入後使用此功能。",
+            .english: "Sign in to use this capability.",
+            .japanese: "この機能を使用するにはログインしてください。"
+        ],
+        "agent.state.configurationRequired": [
+            .simplifiedChinese: "请先在设置中配置 Agent。",
+            .traditionalChinese: "請先在設定中設定 Agent。",
+            .english: "Configure Agent in Settings first.",
+            .japanese: "先に設定でAgentを構成してください。"
+        ],
+        "agent.state.capabilityUnavailable": [
+            .simplifiedChinese: "当前功能不可用。",
+            .traditionalChinese: "目前功能無法使用。",
+            .english: "This capability is unavailable.",
+            .japanese: "この機能は現在利用できません。"
+        ],
+        "agent.state.error": [
+            .simplifiedChinese: "Agent 请求失败。",
+            .traditionalChinese: "Agent 請求失敗。",
+            .english: "The Agent request failed.",
+            .japanese: "Agentのリクエストに失敗しました。"
+        ],
+        "agent.tool.search": [
+            .simplifiedChinese: "搜索漫画",
+            .traditionalChinese: "搜尋漫畫",
+            .english: "Search Comics",
+            .japanese: "漫画を検索"
+        ],
+        "agent.tool.open": [
+            .simplifiedChinese: "打开漫画",
+            .traditionalChinese: "開啟漫畫",
+            .english: "Open Comic",
+            .japanese: "漫画を開く"
+        ],
+        "agent.tool.readerPage": [
+            .simplifiedChinese: "跳转阅读页",
+            .traditionalChinese: "跳轉閱讀頁",
+            .english: "Go to Reader Page",
+            .japanese: "閲覧ページへ移動"
+        ],
+        "agent.tool.readerChapter": [
+            .simplifiedChinese: "跳转章节",
+            .traditionalChinese: "跳轉章節",
+            .english: "Go to Chapter",
+            .japanese: "章へ移動"
+        ],
+        "agent.tool.currentPage": [
+            .simplifiedChinese: "读取当前页",
+            .traditionalChinese: "讀取目前頁面",
+            .english: "Read Current Page",
+            .japanese: "現在のページを読み取る"
+        ],
+        "agent.tool.download": [
+            .simplifiedChinese: "下载漫画",
+            .traditionalChinese: "下載漫畫",
+            .english: "Download Comic",
+            .japanese: "漫画をダウンロード"
+        ],
+        "agent.tool.cancelDownload": [
+            .simplifiedChinese: "取消下载",
+            .traditionalChinese: "取消下載",
+            .english: "Cancel Download",
+            .japanese: "ダウンロードをキャンセル"
+        ],
+        "agent.context.current": [
+            .simplifiedChinese: "当前页面",
+            .traditionalChinese: "目前頁面",
+            .english: "Current Context",
+            .japanese: "現在のコンテキスト"
+        ],
+        "agent.context.user": [
+            .simplifiedChinese: "用户资料",
+            .traditionalChinese: "使用者資料",
+            .english: "User Profile",
+            .japanese: "ユーザープロフィール"
+        ],
+        "agent.context.favorites": [
+            .simplifiedChinese: "收藏",
+            .traditionalChinese: "收藏",
+            .english: "Favorites",
+            .japanese: "お気に入り"
+        ],
+        "agent.context.offlineLibrary": [
+            .simplifiedChinese: "离线漫画库",
+            .traditionalChinese: "離線漫畫庫",
+            .english: "Offline Library",
+            .japanese: "オフラインライブラリ"
+        ],
+        "agent.download.status": [
+            .simplifiedChinese: "下载状态",
+            .traditionalChinese: "下載狀態",
+            .english: "Download Status",
+            .japanese: "ダウンロード状況"
+        ],
+        "agent.download.queued": [
+            .simplifiedChinese: "等待下载",
+            .traditionalChinese: "等待下載",
+            .english: "Queued",
+            .japanese: "待機中"
+        ],
+        "agent.download.inProgress": [
+            .simplifiedChinese: "正在下载",
+            .traditionalChinese: "正在下載",
+            .english: "Downloading",
+            .japanese: "ダウンロード中"
+        ],
+        "agent.download.completed": [
+            .simplifiedChinese: "下载完成",
+            .traditionalChinese: "下載完成",
+            .english: "Download Complete",
+            .japanese: "ダウンロード完了"
+        ],
+        "agent.download.failed": [
+            .simplifiedChinese: "下载失败",
+            .traditionalChinese: "下載失敗",
+            .english: "Download Failed",
+            .japanese: "ダウンロード失敗"
+        ],
+        "agent.download.cancelled": [
+            .simplifiedChinese: "下载已取消",
+            .traditionalChinese: "下載已取消",
+            .english: "Download Cancelled",
+            .japanese: "ダウンロードをキャンセルしました"
+        ],
+        "agent.confirm.title": [
+            .simplifiedChinese: "确认操作",
+            .traditionalChinese: "確認操作",
+            .english: "Confirm Action",
+            .japanese: "操作を確認"
+        ],
+        "agent.confirm.action": [
+            .simplifiedChinese: "确认",
+            .traditionalChinese: "確認",
+            .english: "Confirm",
+            .japanese: "確認"
+        ],
+        "agent.confirm.like": [
+            .simplifiedChinese: "确认点赞",
+            .traditionalChinese: "確認點讚",
+            .english: "Confirm Like",
+            .japanese: "いいねを確認"
+        ],
+        "agent.confirm.favorite": [
+            .simplifiedChinese: "确认收藏",
+            .traditionalChinese: "確認收藏",
+            .english: "Confirm Favorite",
+            .japanese: "お気に入り登録を確認"
+        ],
+        "agent.confirm.cancelDownload": [
+            .simplifiedChinese: "确认取消下载",
+            .traditionalChinese: "確認取消下載",
+            .english: "Confirm Download Cancellation",
+            .japanese: "ダウンロードのキャンセルを確認"
+        ],
+        "agent.confirm.currentPage": [
+            .simplifiedChinese: "确认发送当前页",
+            .traditionalChinese: "確認傳送目前頁面",
+            .english: "Confirm Current Page",
+            .japanese: "現在のページ送信を確認"
+        ],
+        "agent.confirm.currentPage.provider": [
+            .simplifiedChinese: "服务主机：%@",
+            .traditionalChinese: "服務主機：%@",
+            .english: "Provider host: %@",
+            .japanese: "プロバイダーホスト：%@"
+        ],
+        "agent.confirm.currentPage.warning": [
+            .simplifiedChinese: "当前阅读页图片将发送到此主机。",
+            .traditionalChinese: "目前閱讀頁面圖片將傳送至此主機。",
+            .english: "The current reading-page image will be sent to this host.",
+            .japanese: "現在の閲覧ページ画像がこのホストへ送信されます。"
+        ],
+        "agent.confirm.download.comic": [
+            .simplifiedChinese: "漫画：%@",
+            .traditionalChinese: "漫畫：%@",
+            .english: "Comic: %@",
+            .japanese: "漫画：%@"
+        ],
+        "agent.confirm.download.chapters": [
+            .simplifiedChinese: "章节（%d）：%@",
+            .traditionalChinese: "章節（%d）：%@",
+            .english: "Chapters (%d): %@",
+            .japanese: "章（%d）：%@"
+        ],
+        "agent.confirm.download.quality": [
+            .simplifiedChinese: "图片质量：%@",
+            .traditionalChinese: "圖片品質：%@",
+            .english: "Image quality: %@",
+            .japanese: "画像品質：%@"
+        ],
+        "agent.confirm.download.pages": [
+            .simplifiedChinese: "预计图片：%d 张",
+            .traditionalChinese: "預計圖片：%d 張",
+            .english: "Estimated images: %d",
+            .japanese: "推定画像数：%d"
+        ],
+        "agent.confirm.cancel.details": [
+            .simplifiedChinese: "%@ · %d/%d 张图片 · %@",
+            .traditionalChinese: "%@ · %d/%d 張圖片 · %@",
+            .english: "%@ · %d/%d images · %@",
+            .japanese: "%@ · %d/%d枚 · %@"
+        ],
+        "agent.confirm.desired.details": [
+            .simplifiedChinese: "%@ · %@：%@",
+            .traditionalChinese: "%@ · %@：%@",
+            .english: "%@ · %@: %@",
+            .japanese: "%@ · %@：%@"
+        ],
+        "agent.confirm.enabled": [
+            .simplifiedChinese: "开启",
+            .traditionalChinese: "開啟",
+            .english: "On",
+            .japanese: "オン"
+        ],
+        "agent.confirm.disabled": [
+            .simplifiedChinese: "关闭",
+            .traditionalChinese: "關閉",
+            .english: "Off",
+            .japanese: "オフ"
+        ],
+        "agent.state.visionUnsupported": [
+            .simplifiedChinese: "当前模型不支持读取图片；请在设置中选择支持视觉的模型。",
+            .traditionalChinese: "目前模型不支援讀取圖片；請在設定中選擇支援視覺的模型。",
+            .english: "The selected model cannot read images. Choose a vision-capable model in Settings.",
+            .japanese: "選択したモデルは画像を読み取れません。設定で画像対応モデルを選択してください。"
+        ],
+        "startup.preparing": [
+            .simplifiedChinese: "准备中",
+            .traditionalChinese: "準備中",
+            .english: "Preparing",
+            .japanese: "準備中"
+        ],
+        "startup.validatingSession": [
+            .simplifiedChinese: "正在验证会话",
+            .traditionalChinese: "正在驗證工作階段",
+            .english: "Validating Session",
+            .japanese: "セッションを確認中"
+        ],
+        "startup.restoringCredentials": [
+            .simplifiedChinese: "正在恢复登录凭据",
+            .traditionalChinese: "正在恢復登入憑證",
+            .english: "Restoring Credentials",
+            .japanese: "ログイン情報を復元中"
+        ],
+        "startup.loadingProfile": [
+            .simplifiedChinese: "正在加载用户资料",
+            .traditionalChinese: "正在載入使用者資料",
+            .english: "Loading Profile",
+            .japanese: "プロフィールを読み込み中"
+        ],
+        "startup.failed": [
+            .simplifiedChinese: "启动失败",
+            .traditionalChinese: "啟動失敗",
+            .english: "Startup Failed",
+            .japanese: "起動に失敗しました"
+        ],
+        "startup.retry": [
+            .simplifiedChinese: "重试",
+            .traditionalChinese: "重試",
+            .english: "Retry",
+            .japanese: "再試行"
+        ],
+        "startup.login": [
+            .simplifiedChinese: "前往登录",
+            .traditionalChinese: "前往登入",
+            .english: "Go to Login",
+            .japanese: "ログインへ"
+        ],
+        "settings.agent": [
+            .simplifiedChinese: "Agent",
+            .traditionalChinese: "Agent",
+            .english: "Agent",
+            .japanese: "Agent"
+        ],
+        "settings.agent.subtitle": [
+            .simplifiedChinese: "配置模型、API 密钥和服务地址",
+            .traditionalChinese: "設定模型、API 金鑰和服務位址",
+            .english: "Configure the model, API key, and endpoint",
+            .japanese: "モデル、APIキー、接続先を設定"
+        ],
+        "settings.agent.provider": [
+            .simplifiedChinese: "Provider",
+            .traditionalChinese: "Provider",
+            .english: "Provider",
+            .japanese: "プロバイダー"
+        ],
+        "settings.agent.provider.openAICompatible": [
+            .simplifiedChinese: "OpenAI 兼容",
+            .traditionalChinese: "OpenAI 相容",
+            .english: "OpenAI-Compatible",
+            .japanese: "OpenAI互換"
+        ],
+        "settings.agent.providerFormat": [
+            .simplifiedChinese: "Provider 格式",
+            .traditionalChinese: "Provider 格式",
+            .english: "Provider Format",
+            .japanese: "プロバイダー形式"
+        ],
+        "settings.agent.provider.anthropicCompatible": [
+            .simplifiedChinese: "Anthropic 兼容",
+            .traditionalChinese: "Anthropic 相容",
+            .english: "Anthropic-Compatible",
+            .japanese: "Anthropic互換"
+        ],
+        "settings.agent.applied": [
+            .simplifiedChinese: "Agent 配置已应用",
+            .traditionalChinese: "Agent 設定已套用",
+            .english: "Agent configuration applied",
+            .japanese: "Agent設定を適用しました"
+        ],
+        "settings.agent.cleared": [
+            .simplifiedChinese: "当前 API 密钥已清除",
+            .traditionalChinese: "目前 API 金鑰已清除",
+            .english: "Current API key cleared",
+            .japanese: "現在のAPIキーを消去しました"
+        ],
+        "settings.agent.clearToken": [
+            .simplifiedChinese: "清除 token",
+            .traditionalChinese: "清除 token",
+            .english: "Clear Token",
+            .japanese: "トークンを消去"
+        ],
+        "settings.agent.clearToken.confirm": [
+            .simplifiedChinese: "确认清除当前 Provider 保存的 API token？",
+            .traditionalChinese: "確認清除目前 Provider 儲存的 API token？",
+            .english: "Clear the API token saved for the current provider?",
+            .japanese: "現在のProviderに保存されたAPIトークンを消去しますか？"
+        ],
+        "settings.agent.clearToken.error": [
+            .simplifiedChinese: "无法清除 API token",
+            .traditionalChinese: "無法清除 API token",
+            .english: "Could not clear the API token",
+            .japanese: "APIトークンを消去できません"
+        ],
+        "settings.agent.reset": [
+            .simplifiedChinese: "重置为默认配置",
+            .traditionalChinese: "重設為預設設定",
+            .english: "Reset to Defaults",
+            .japanese: "既定値にリセット"
+        ],
+        "settings.agent.reset.confirm": [
+            .simplifiedChinese: "确认重置 Provider、模型、Endpoint 和 Agent 行为设置？保存的 API token 不会被清除。",
+            .traditionalChinese: "確認重設 Provider、模型、Endpoint 與 Agent 行為設定？已儲存的 API token 不會被清除。",
+            .english: "Reset provider, model, endpoint, and Agent behavior settings? Saved API tokens are not cleared.",
+            .japanese: "Provider、モデル、Endpoint、Agent動作設定をリセットしますか？保存済みAPIトークンは消去されません。"
+        ],
+        "settings.agent.action.error": [
+            .simplifiedChinese: "操作失败",
+            .traditionalChinese: "操作失敗",
+            .english: "Action failed",
+            .japanese: "操作に失敗しました"
+        ],
+        "settings.agent.resetDone": [
+            .simplifiedChinese: "已重置为默认配置",
+            .traditionalChinese: "已重設為預設設定",
+            .english: "Reset to defaults",
+            .japanese: "既定値にリセットしました"
+        ],
+        "settings.agent.executionMode": [
+            .simplifiedChinese: "Agent 模式",
+            .traditionalChinese: "Agent 模式",
+            .english: "Agent Mode",
+            .japanese: "Agentモード"
+        ],
+        "settings.agent.executionMode.ask": [
+            .simplifiedChinese: "Ask（操作前确认）",
+            .traditionalChinese: "Ask（操作前確認）",
+            .english: "Ask (confirm actions)",
+            .japanese: "Ask（操作前に確認）"
+        ],
+        "settings.agent.executionMode.yolo": [
+            .simplifiedChinese: "YOLO（自动执行）",
+            .traditionalChinese: "YOLO（自動執行）",
+            .english: "YOLO (auto-execute)",
+            .japanese: "YOLO（自動実行）"
+        ],
+        "settings.agent.executionMode.yoloWarning": [
+            .simplifiedChinese: "YOLO 会自动执行下载、点赞、收藏和屏蔽词修改；发送当前阅读页图片仍需确认。",
+            .traditionalChinese: "YOLO 會自動執行下載、按讚、收藏與封鎖詞修改；傳送目前閱讀頁圖片仍需確認。",
+            .english: "YOLO auto-executes downloads, likes, favorites, and blocked-word changes. Sending the current page image still requires confirmation.",
+            .japanese: "YOLOはダウンロード、いいね、お気に入り、ブロックワード変更を自動実行します。現在ページの画像送信は引き続き確認が必要です。"
+        ],
+        "settings.agent.riskAuthorization": [
+            .simplifiedChinese: "授权 Agent 对风险权限控制",
+            .traditionalChinese: "授權 Agent 控制風險權限",
+            .english: "Authorize Agent Risk Controls",
+            .japanese: "Agentのリスク権限制御を許可"
+        ],
+        "settings.agent.riskAuthorization.footer": [
+            .simplifiedChinese: "允许 Agent 请求修改屏蔽词/只选词、收藏状态，以及取消或删除已下载漫画。Ask 模式仍会逐次确认。",
+            .traditionalChinese: "允許 Agent 請求修改封鎖詞/只選詞、收藏狀態，以及取消或刪除已下載漫畫。Ask 模式仍會逐次確認。",
+            .english: "Allows Agent to request filter-word and favorite changes, and cancel or delete downloads. Ask mode still confirms each action.",
+            .japanese: "フィルターワードやお気に入りの変更、ダウンロードの取消・削除をAgentに許可します。Askモードでは各操作を確認します。"
+        ],
+        "agent.state.risk_authorization_required": [
+            .simplifiedChinese: "设置中未授权 Agent 风险权限控制",
+            .traditionalChinese: "設定中未授權 Agent 風險權限制御",
+            .english: "Agent risk controls are not authorized in Settings",
+            .japanese: "設定でAgentのリスク権限制御が許可されていません"
+        ],
+        "settings.agent.toolCallLimit": [
+            .simplifiedChinese: "每轮 Tool Call 上限",
+            .traditionalChinese: "每輪 Tool Call 上限",
+            .english: "Tool Calls per Turn",
+            .japanese: "ターンごとのTool Call上限"
+        ],
+        "settings.agent.toolCallLimit.footer": [
+            .simplifiedChinese: "默认 10，最大 20。达到上限前 2 次时，Agent 会被要求基于已有信息直接回复。",
+            .traditionalChinese: "預設 10，最大 20。達到上限前 2 次時，Agent 會被要求依現有資訊直接回覆。",
+            .english: "Default 10, maximum 20. With 2 calls remaining, Agent is instructed to answer directly from gathered information.",
+            .japanese: "既定値は10、最大20です。残り2回になると、収集済み情報から直接回答するようAgentへ指示します。"
+        ],
+        "settings.agent.compaction": [
+            .simplifiedChinese: "上下文",
+            .traditionalChinese: "上下文",
+            .english: "Context",
+            .japanese: "コンテキスト"
+        ],
+        "settings.agent.compaction.auto": [
+            .simplifiedChinese: "自动压缩上下文",
+            .traditionalChinese: "自動壓縮上下文",
+            .english: "Auto Compact Context",
+            .japanese: "コンテキストを自動圧縮"
+        ],
+        "settings.agent.compaction.threshold": [
+            .simplifiedChinese: "压缩阈值",
+            .traditionalChinese: "壓縮閾值",
+            .english: "Compaction Threshold",
+            .japanese: "圧縮しきい値"
+        ],
+        "settings.agent.compaction.footer": [
+            .simplifiedChinese: "达到阈值后，Agent 会总结较早的完整对话，只把摘要和最近 4 轮发送给模型。压缩本身不删除本地历史；历史仍受每会话 512 KiB 上限约束。",
+            .traditionalChinese: "達到閾值後，Agent 會總結較早的完整對話，只把摘要與最近 4 輪傳送給模型。壓縮本身不刪除本機歷史；歷史仍受每會話 512 KiB 上限約束。",
+            .english: "At the threshold, Agent summarizes older complete turns and sends only that summary plus the latest 4 turns. Compaction does not delete local history; the 512 KiB per-session limit still applies.",
+            .japanese: "しきい値に達すると古い完了ターンを要約し、要約と直近4ターンだけをモデルへ送信します。圧縮自体はローカル履歴を削除しませんが、セッションごとの512 KiB上限は適用されます。"
+        ],
+        "settings.agent.apiKey": [
+            .simplifiedChinese: "API 密钥",
+            .traditionalChinese: "API 金鑰",
+            .english: "API Key",
+            .japanese: "APIキー"
+        ],
+        "settings.agent.model": [
+            .simplifiedChinese: "模型",
+            .traditionalChinese: "模型",
+            .english: "Model",
+            .japanese: "モデル"
+        ],
+        "settings.agent.baseURL": [
+            .simplifiedChinese: "Base URL",
+            .traditionalChinese: "Base URL",
+            .english: "Base URL",
+            .japanese: "ベースURL"
+        ],
+        "settings.agent.customHostPrivacy": [
+            .simplifiedChinese: "当前页面、漫画库和阅读内容可能会发送到此服务地址。请确认你信任该服务。",
+            .traditionalChinese: "目前頁面、漫畫庫和閱讀內容可能會傳送到此服務位址。請確認你信任該服務。",
+            .english: "The current page, library, and reading content may be sent to this endpoint. Confirm that you trust it.",
+            .japanese: "現在のページ、ライブラリ、閲覧内容がこの接続先へ送信される場合があります。信頼できることを確認してください。"
+        ],
+        "settings.agent.customHost": [
+            .simplifiedChinese: "主机：%@",
+            .traditionalChinese: "主機：%@",
+            .english: "Host: %@",
+            .japanese: "ホスト：%@"
+        ],
+        "settings.agent.confirmCustomHost": [
+            .simplifiedChinese: "我信任此服务地址",
+            .traditionalChinese: "我信任此服務位址",
+            .english: "I Trust This Endpoint",
+            .japanese: "この接続先を信頼する"
+        ],
+        "agent.accessibility.dragHint": [
+            .simplifiedChinese: "拖动可移动按钮位置。",
+            .traditionalChinese: "拖曳可移動按鈕位置。",
+            .english: "Drag to move the button.",
+            .japanese: "ドラッグしてボタンを移動できます。"
+        ],
+        "agent.accessibility.moveLeft": [
+            .simplifiedChinese: "移至左侧",
+            .traditionalChinese: "移至左側",
+            .english: "Move left",
+            .japanese: "左へ移動"
+        ],
+        "agent.accessibility.moveRight": [
+            .simplifiedChinese: "移至右侧",
+            .traditionalChinese: "移至右側",
+            .english: "Move right",
+            .japanese: "右へ移動"
+        ],
+        "agent.accessibility.moveUp": [
+            .simplifiedChinese: "移至上方",
+            .traditionalChinese: "移至上方",
+            .english: "Move up",
+            .japanese: "上へ移動"
+        ],
+        "agent.accessibility.moveDown": [
+            .simplifiedChinese: "移至下方",
+            .traditionalChinese: "移至下方",
+            .english: "Move down",
+            .japanese: "下へ移動"
+        ],
+        "agent.accessibility.resetPosition": [
+            .simplifiedChinese: "重置按钮位置",
+            .traditionalChinese: "重設按鈕位置",
+            .english: "Reset button position",
+            .japanese: "ボタン位置をリセット"
+        ],
+        "agent.accessibility.progress": [
+            .simplifiedChinese: "进度：%d%%",
+            .traditionalChinese: "進度：%d%%",
+            .english: "Progress: %d%%",
+            .japanese: "進捗：%d%%"
+        ],
+        "agent.accessibility.error": [
+            .simplifiedChinese: "错误：%@",
+            .traditionalChinese: "錯誤：%@",
+            .english: "Error: %@",
+            .japanese: "エラー：%@"
+        ],
         "common.done": [
             .simplifiedChinese: "完成",
             .traditionalChinese: "完成",
@@ -1468,6 +2021,234 @@ nonisolated private enum AppLocalizationCatalog {
             .traditionalChinese: "確認更新離線漫畫？",
             .english: "Update this offline comic?",
             .japanese: "オフライン漫画を更新しますか？"
+        ],
+        "common.delete": [
+            .simplifiedChinese: "删除", .traditionalChinese: "刪除", .english: "Delete", .japanese: "削除"
+        ],
+        "common.continue": [
+            .simplifiedChinese: "继续", .traditionalChinese: "繼續", .english: "Continue", .japanese: "続ける"
+        ],
+        "common.close": [
+            .simplifiedChinese: "关闭", .traditionalChinese: "關閉", .english: "Close", .japanese: "閉じる"
+        ],
+        "common.confirm": [
+            .simplifiedChinese: "确认", .traditionalChinese: "確認", .english: "Confirm", .japanese: "確認"
+        ],
+        "agent.title": [
+            .simplifiedChinese: "Shirayuki Agent", .traditionalChinese: "Shirayuki Agent", .english: "Shirayuki Agent", .japanese: "Shirayuki Agent"
+        ],
+        "agent.empty": [
+            .simplifiedChinese: "发送消息开始新会话", .traditionalChinese: "傳送訊息開始新會話", .english: "Send a message to start a session", .japanese: "メッセージを送信してセッションを開始"
+        ],
+        "contentFilter.resultsHidden": [
+            .simplifiedChinese: "结果已被屏蔽词隐藏", .traditionalChinese: "結果已被封鎖詞隱藏", .english: "Results hidden by blocked words", .japanese: "結果はブロックワードで非表示です"
+        ],
+        "settings.contentFilter": [
+            .simplifiedChinese: "内容过滤", .traditionalChinese: "內容過濾", .english: "Content Filtering", .japanese: "コンテンツフィルター"
+        ],
+        "settings.contentFilter.subtitle": [
+            .simplifiedChinese: "管理远程漫画屏蔽词", .traditionalChinese: "管理遠端漫畫封鎖詞", .english: "Manage blocked words for remote comics", .japanese: "リモート漫画のブロックワードを管理"
+        ],
+        "settings.contentFilter.words": [
+            .simplifiedChinese: "屏蔽词", .traditionalChinese: "封鎖詞", .english: "Blocked Words", .japanese: "ブロックワード"
+        ],
+        "settings.contentFilter.word": [
+            .simplifiedChinese: "词条", .traditionalChinese: "詞條", .english: "Word", .japanese: "ワード"
+        ],
+        "settings.contentFilter.add": [
+            .simplifiedChinese: "添加屏蔽词", .traditionalChinese: "新增封鎖詞", .english: "Add Blocked Word", .japanese: "ブロックワードを追加"
+        ],
+        "settings.contentFilter.edit": [
+            .simplifiedChinese: "编辑屏蔽词", .traditionalChinese: "編輯封鎖詞", .english: "Edit Blocked Word", .japanese: "ブロックワードを編集"
+        ],
+        "settings.contentFilter.saved": [
+            .simplifiedChinese: "已保存", .traditionalChinese: "已儲存", .english: "Saved", .japanese: "保存しました"
+        ],
+        "settings.contentFilter.duplicate": [
+            .simplifiedChinese: "该屏蔽词已存在", .traditionalChinese: "該封鎖詞已存在", .english: "Blocked word already exists", .japanese: "ブロックワードは既に存在します"
+        ],
+        "settings.contentFilter.agentConfirmation": [
+            .simplifiedChinese: "Agent 修改前确认", .traditionalChinese: "Agent 修改前確認", .english: "Confirm Agent Changes", .japanese: "Agent の変更前に確認"
+        ],
+        "settings.contentFilter.agentConfirmationRisk": [
+            .simplifiedChinese: "关闭后，Agent 可直接修改全部屏蔽词。", .traditionalChinese: "關閉後，Agent 可直接修改全部封鎖詞。", .english: "When off, Agent can change all blocked words without confirmation.", .japanese: "オフにすると Agent は確認なしで変更できます。"
+        ],
+        "settings.contentFilter.error": [
+            .simplifiedChinese: "无法保存屏蔽词", .traditionalChinese: "無法儲存封鎖詞", .english: "Could not save blocked word", .japanese: "ブロックワードを保存できません"
+        ],
+        "settings.contentFilter.error.empty": [
+            .simplifiedChinese: "词条不能为空", .traditionalChinese: "詞條不可為空", .english: "Word cannot be empty", .japanese: "ワードを空にできません"
+        ],
+        "settings.contentFilter.error.control_character": [
+            .simplifiedChinese: "词条包含控制字符", .traditionalChinese: "詞條包含控制字元", .english: "Word contains a control character", .japanese: "制御文字が含まれています"
+        ],
+        "settings.contentFilter.error.too_long": [
+            .simplifiedChinese: "词条不能超过 64 个字符", .traditionalChinese: "詞條不可超過 64 個字元", .english: "Word cannot exceed 64 characters", .japanese: "64 文字以内にしてください"
+        ],
+        "settings.contentFilter.error.limit_reached": [
+            .simplifiedChinese: "最多保存 100 条", .traditionalChinese: "最多儲存 100 條", .english: "Maximum 100 blocked words", .japanese: "最大 100 件です"
+        ],
+        "settings.contentFilter.error.not_found": [
+            .simplifiedChinese: "屏蔽词不存在", .traditionalChinese: "封鎖詞不存在", .english: "Blocked word not found", .japanese: "ブロックワードが見つかりません"
+        ],
+        "settings.contentFilter.error.duplicate_target": [
+            .simplifiedChinese: "目标屏蔽词已存在", .traditionalChinese: "目標封鎖詞已存在", .english: "Target blocked word already exists", .japanese: "変更先は既に存在します"
+        ],
+        "settings.contentFilter.operations": [
+            .simplifiedChinese: "操作", .traditionalChinese: "操作", .english: "Actions", .japanese: "操作"
+        ],
+        "settings.contentFilter.addBlocked": [
+            .simplifiedChinese: "添加屏蔽词", .traditionalChinese: "新增封鎖詞", .english: "Add Blocked Word", .japanese: "ブロックワードを追加"
+        ],
+        "settings.contentFilter.addIncluded": [
+            .simplifiedChinese: "添加只选词", .traditionalChinese: "新增只選詞", .english: "Add Included Word", .japanese: "含めるワードを追加"
+        ],
+        "settings.contentFilter.library": [
+            .simplifiedChinese: "词库", .traditionalChinese: "詞庫", .english: "Word Libraries", .japanese: "ワードライブラリ"
+        ],
+        "settings.contentFilter.blockedCount": [
+            .simplifiedChinese: "屏蔽词数量", .traditionalChinese: "封鎖詞數量", .english: "Blocked words", .japanese: "ブロックワード数"
+        ],
+        "settings.contentFilter.includedCount": [
+            .simplifiedChinese: "只选词数量", .traditionalChinese: "只選詞數量", .english: "Included words", .japanese: "含めるワード数"
+        ],
+        "settings.contentFilter.viewBlocked": [
+            .simplifiedChinese: "查看屏蔽词", .traditionalChinese: "查看封鎖詞", .english: "View Blocked Words", .japanese: "ブロックワードを表示"
+        ],
+        "settings.contentFilter.viewIncluded": [
+            .simplifiedChinese: "查看只选词", .traditionalChinese: "查看只選詞", .english: "View Included Words", .japanese: "含めるワードを表示"
+        ],
+        "settings.contentFilter.danger": [
+            .simplifiedChinese: "危险操作", .traditionalChinese: "危險操作", .english: "Danger Zone", .japanese: "危険な操作"
+        ],
+        "settings.contentFilter.deleteAllBlocked": [
+            .simplifiedChinese: "删除所有屏蔽词", .traditionalChinese: "刪除所有封鎖詞", .english: "Delete All Blocked Words", .japanese: "すべてのブロックワードを削除"
+        ],
+        "settings.contentFilter.deleteAllIncluded": [
+            .simplifiedChinese: "删除所有只选词", .traditionalChinese: "刪除所有只選詞", .english: "Delete All Included Words", .japanese: "すべての含めるワードを削除"
+        ],
+        "settings.contentFilter.reset": [
+            .simplifiedChinese: "重置过滤配置", .traditionalChinese: "重設過濾設定", .english: "Reset Filter Settings", .japanese: "フィルター設定をリセット"
+        ],
+        "settings.contentFilter.deleteAllBlocked.confirm": [
+            .simplifiedChinese: "将删除全部屏蔽词，不能撤销。", .traditionalChinese: "將刪除全部封鎖詞，無法復原。", .english: "This deletes every blocked word and cannot be undone.", .japanese: "すべてのブロックワードを削除します。元に戻せません。"
+        ],
+        "settings.contentFilter.deleteAllIncluded.confirm": [
+            .simplifiedChinese: "将删除全部只选词，不能撤销。", .traditionalChinese: "將刪除全部只選詞，無法復原。", .english: "This deletes every included word and cannot be undone.", .japanese: "すべての含めるワードを削除します。元に戻せません。"
+        ],
+        "settings.contentFilter.reset.confirm": [
+            .simplifiedChinese: "将删除屏蔽词和只选词，不能撤销。", .traditionalChinese: "將刪除封鎖詞和只選詞，無法復原。", .english: "This deletes both word libraries and cannot be undone.", .japanese: "両方のワードライブラリを削除します。元に戻せません。"
+        ],
+        "settings.appearance.animation": [
+            .simplifiedChinese: "动画模式", .traditionalChinese: "動畫模式", .english: "Animation Mode", .japanese: "アニメーション"
+        ],
+        "settings.appearance.animation.standard": [
+            .simplifiedChinese: "标准", .traditionalChinese: "標準", .english: "Standard", .japanese: "標準"
+        ],
+        "settings.appearance.animation.reduced": [
+            .simplifiedChinese: "减少动态", .traditionalChinese: "減少動態", .english: "Reduced", .japanese: "軽減"
+        ],
+        "settings.appearance.animation.off": [
+            .simplifiedChinese: "关闭", .traditionalChinese: "關閉", .english: "Off", .japanese: "オフ"
+        ],
+        "settings.appearance.agentButtonStyle": [
+            .simplifiedChinese: "Agent 按钮样式", .traditionalChinese: "Agent 按鈕樣式", .english: "Agent Button Style", .japanese: "Agent ボタンスタイル"
+        ],
+        "settings.appearance.agentButtonStyle.accent": [
+            .simplifiedChinese: "强调色", .traditionalChinese: "強調色", .english: "Accent", .japanese: "アクセント"
+        ],
+        "settings.appearance.agentButtonStyle.glass": [
+            .simplifiedChinese: "玻璃", .traditionalChinese: "玻璃", .english: "Glass", .japanese: "ガラス"
+        ],
+        "settings.appearance.agentButtonOpacity": [
+            .simplifiedChinese: "Agent 按钮透明度", .traditionalChinese: "Agent 按鈕透明度", .english: "Agent Button Opacity", .japanese: "Agent ボタン透明度"
+        ],
+        "settings.agent.history": [
+            .simplifiedChinese: "Agent 会话", .traditionalChinese: "Agent 會話", .english: "Agent Sessions", .japanese: "Agent セッション"
+        ],
+        "settings.agent.history.count": [
+            .simplifiedChinese: "会话数量", .traditionalChinese: "會話數量", .english: "Session Count", .japanese: "セッション数"
+        ],
+        "settings.agent.history.updated": [
+            .simplifiedChinese: "当前会话更新", .traditionalChinese: "目前會話更新", .english: "Current Session Updated", .japanese: "現在のセッション更新"
+        ],
+        "settings.agent.history.size": [
+            .simplifiedChinese: "当前会话大小", .traditionalChinese: "目前會話大小", .english: "Current Session Size", .japanese: "現在のセッションサイズ"
+        ],
+        "settings.agent.history.manage": [
+            .simplifiedChinese: "管理会话历史", .traditionalChinese: "管理會話歷史", .english: "Manage Session History", .japanese: "セッション履歴を管理"
+        ],
+        "settings.agent.history.new": [
+            .simplifiedChinese: "新建会话", .traditionalChinese: "新增會話", .english: "New Session", .japanese: "新規セッション"
+        ],
+        "settings.agent.history.cancelActive": [
+            .simplifiedChinese: "取消当前 Agent 操作后继续？", .traditionalChinese: "取消目前 Agent 操作後繼續？", .english: "Cancel the active Agent operation and continue?", .japanese: "実行中の Agent 操作をキャンセルして続けますか？"
+        ],
+        "settings.storage.agent": [
+            .simplifiedChinese: "Agent 会话", .traditionalChinese: "Agent 會話", .english: "Agent Sessions", .japanese: "Agent セッション"
+        ],
+        "settings.storage.agent.deleteAll": [
+            .simplifiedChinese: "删除全部 Agent 会话", .traditionalChinese: "刪除全部 Agent 會話", .english: "Delete All Agent Sessions", .japanese: "Agent セッションをすべて削除"
+        ],
+        "settings.storage.agent.deleteAll.confirm": [
+            .simplifiedChinese: "这会删除所有账号和匿名用户的本地 Agent 历史。", .traditionalChinese: "這會刪除所有帳號與匿名使用者的本機 Agent 歷史。", .english: "This deletes local Agent history for every account and anonymous use.", .japanese: "すべてのアカウントと匿名利用のローカル履歴を削除します。"
+        ],
+        "settings.storage.agent.deleteAll.done": [
+            .simplifiedChinese: "Agent 会话已删除", .traditionalChinese: "Agent 會話已刪除", .english: "Agent sessions deleted", .japanese: "Agent セッションを削除しました"
+        ],
+        "settings.storage.agent.deleteAll.error": [
+            .simplifiedChinese: "无法删除 Agent 会话", .traditionalChinese: "無法刪除 Agent 會話", .english: "Could not delete Agent sessions", .japanese: "Agent セッションを削除できません"
+        ],
+        "agent.state.input_too_large": [
+            .simplifiedChinese: "输入超过 16 KiB", .traditionalChinese: "輸入超過 16 KiB", .english: "Input exceeds 16 KiB", .japanese: "入力が 16 KiB を超えています"
+        ],
+        "agent.state.session_limit_reached": [
+            .simplifiedChinese: "当前会话已达到容量限制", .traditionalChinese: "目前會話已達容量限制", .english: "This session reached its size limit", .japanese: "このセッションは容量上限に達しました"
+        ],
+        "agent.state.configuration_required": [
+            .simplifiedChinese: "请先配置 Agent", .traditionalChinese: "請先設定 Agent", .english: "Configure Agent first", .japanese: "Agent を設定してください"
+        ],
+        "agent.state.login_required": [
+            .simplifiedChinese: "此操作需要登录", .traditionalChinese: "此操作需要登入", .english: "Sign in is required", .japanese: "ログインが必要です"
+        ],
+        "agent.state.agent_error": [
+            .simplifiedChinese: "Agent 请求失败", .traditionalChinese: "Agent 請求失敗", .english: "Agent request failed", .japanese: "Agent リクエストに失敗しました"
+        ],
+        "agent.state.transport_configurationRequired": [
+            .simplifiedChinese: "Agent 配置不完整（configurationRequired）", .traditionalChinese: "Agent 設定不完整（configurationRequired）", .english: "Agent configuration is incomplete (configurationRequired)", .japanese: "Agent設定が不完全です（configurationRequired）"
+        ],
+        "agent.state.transport_invalidEndpoint": [
+            .simplifiedChinese: "Agent endpoint 无效（invalidEndpoint）", .traditionalChinese: "Agent endpoint 無效（invalidEndpoint）", .english: "Agent endpoint is invalid (invalidEndpoint)", .japanese: "Agent endpointが無効です（invalidEndpoint）"
+        ],
+        "agent.state.transport_redirectRejected": [
+            .simplifiedChinese: "Agent endpoint 重定向被拒绝（redirectRejected）", .traditionalChinese: "Agent endpoint 重新導向遭拒（redirectRejected）", .english: "Agent endpoint redirect was rejected (redirectRejected)", .japanese: "Agent endpointのリダイレクトを拒否しました（redirectRejected）"
+        ],
+        "agent.state.transport_invalidImage": [
+            .simplifiedChinese: "页面图片无效或过大（invalidImage）", .traditionalChinese: "頁面圖片無效或過大（invalidImage）", .english: "Page image is invalid or too large (invalidImage)", .japanese: "ページ画像が無効または大きすぎます（invalidImage）"
+        ],
+        "agent.state.transport_visionUnsupported": [
+            .simplifiedChinese: "模型不支持图片输入（visionUnsupported）", .traditionalChinese: "模型不支援圖片輸入（visionUnsupported）", .english: "Model does not support image input (visionUnsupported)", .japanese: "モデルは画像入力に対応していません（visionUnsupported）"
+        ],
+        "agent.state.transport_invalidResponse": [
+            .simplifiedChinese: "Provider 返回空响应或未知结构（invalidResponse）", .traditionalChinese: "Provider 回傳空回應或未知結構（invalidResponse）", .english: "Provider returned an empty or unknown response (invalidResponse)", .japanese: "Providerが空または未知形式の応答を返しました（invalidResponse）"
+        ],
+        "agent.state.transport_unauthorized": [
+            .simplifiedChinese: "API 密钥无效或未授权（unauthorized）", .traditionalChinese: "API 金鑰無效或未授權（unauthorized）", .english: "API key is invalid or unauthorized (unauthorized)", .japanese: "APIキーが無効または未承認です（unauthorized）"
+        ],
+        "agent.state.transport_serverError": [
+            .simplifiedChinese: "Provider 返回服务器错误（serverError）", .traditionalChinese: "Provider 回傳伺服器錯誤（serverError）", .english: "Provider returned a server error (serverError)", .japanese: "Providerがサーバーエラーを返しました（serverError）"
+        ],
+        "agent.state.transport_decodingFailed": [
+            .simplifiedChinese: "Provider 响应无法解析（decodingFailed）", .traditionalChinese: "Provider 回應無法解析（decodingFailed）", .english: "Provider response could not be decoded (decodingFailed)", .japanese: "Provider応答を解析できません（decodingFailed）"
+        ],
+        "agent.state.transport_networkFailed": [
+            .simplifiedChinese: "Provider 网络请求失败（networkFailed）", .traditionalChinese: "Provider 網路請求失敗（networkFailed）", .english: "Provider network request failed (networkFailed)", .japanese: "Providerへのネットワーク要求に失敗しました（networkFailed）"
+        ],
+        "agent.state.step_limit_reached": [
+            .simplifiedChinese: "Agent 已达到内部步骤安全上限", .traditionalChinese: "Agent 已達到內部步驟安全上限", .english: "Agent reached the internal step safety limit", .japanese: "Agentは内部ステップ安全上限に達しました"
+        ],
+        "agent.state.tool_call_limit_reached": [
+            .simplifiedChinese: "Agent 已达到 Tool Call 上限", .traditionalChinese: "Agent 已達到 Tool Call 上限", .english: "Agent reached the tool-call limit", .japanese: "AgentはTool Call上限に達しました"
         ]
     ]
 }

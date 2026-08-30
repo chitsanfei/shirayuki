@@ -16,6 +16,53 @@ final class RoutingAndSettingsTests: XCTestCase {
         XCTAssertEqual(AppProxyRule.official.displayName, "Picacomic 官方")
     }
 
+    func testAppVersionUsesInjectedMarketingVersion() throws {
+        let bundleURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ShirayukiVersion-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: bundleURL) }
+        let info: [String: Any] = [
+            "CFBundleIdentifier": "shizukuworld.shirayuki.tests",
+            "CFBundlePackageType": "BND",
+            "CFBundleShortVersionString": "0.0.4"
+        ]
+        let infoData = try PropertyListSerialization.data(
+            fromPropertyList: info,
+            format: .xml,
+            options: 0
+        )
+        try infoData.write(to: bundleURL.appendingPathComponent("Info.plist"))
+        let bundle = try XCTUnwrap(Bundle(url: bundleURL))
+        let injectedVersion = try XCTUnwrap(
+            bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        )
+
+        XCTAssertEqual(injectedVersion, "0.0.4")
+        XCTAssertEqual(SettingsViewModel.displayVersion(in: bundle), "v0.0.4")
+    }
+
+    @MainActor
+    func testAgentSettingsDefaultToDeepSeekOpenAICompatible() {
+        XCTAssertEqual(LLMProvider.allCases, [.openAICompatible, .anthropicCompatible])
+        XCTAssertEqual(LLMSettingsStore.defaultProvider, .openAICompatible)
+        XCTAssertEqual(LLMSettingsStore.defaultModel, "deepseek-chat")
+        XCTAssertEqual(
+            LLMSettingsStore.defaultEndpoint.absoluteString,
+            "https://api.deepseek.com"
+        )
+    }
+
+    func testAgentResetCopyIsProviderNeutral() {
+        XCTAssertEqual(
+            AppLocalization.text("settings.agent.reset", language: .simplifiedChinese),
+            "重置为默认配置"
+        )
+        XCTAssertEqual(
+            AppLocalization.text("settings.agent.reset", language: .english),
+            "Reset to Defaults"
+        )
+    }
+
     func testThirdPartyNoticesDescribeDesignReferences() {
         // Access the static property directly to avoid instantiating the
         // @MainActor-isolated SettingsViewModel, which triggers a Swift

@@ -55,7 +55,11 @@ struct OfflineComicsView: View {
             OfflineDownloadSheet(record: record) { quality in
                 startDownload(record: record, quality: quality)
             }
+            .agentSurfaceHost(
+                context: .nonSettingsSheet(parent: .offlineLibrary, kind: "offlineDownload")
+            )
         }
+        .agentPageContext(.offlineLibrary)
     }
 
     private func offlineRow(_ record: OfflineComicRecord) -> some View {
@@ -165,25 +169,41 @@ struct OfflineComicsView: View {
         let chapters = record.chapters.map {
             PicaChapter(uid: $0.id, title: $0.title, order: $0.order, id: $0.id)
         }
+        let allChapters = record.chapterCatalog.isEmpty ? chapters : record.chapterCatalog
         progress[record.id] = OfflineDownloadProgress(completedImages: 0, totalImages: 0)
-        Task {
-            try? await OfflineComicStore.shared.download(
-                comicID: record.id,
-                title: record.title,
-                thumbURL: record.thumbURL,
-                createdAt: record.createdAt,
-                updatedAt: record.updatedAt,
-                chapters: chapters,
-                quality: quality,
-                allChapters: record.chapterCatalog,
-                progress: { value in
-                    Task { @MainActor in
-                        progress[record.id] = value
+        Task { @MainActor in
+            do {
+                let jobID = try await DownloadCoordinator.shared.start(
+                    request: DownloadRequest(
+                        comicID: record.id,
+                        title: record.title,
+                        thumbURL: record.thumbURL,
+                        createdAt: record.createdAt,
+                        updatedAt: record.updatedAt,
+                        chapters: chapters,
+                        quality: quality,
+                        allChapters: allChapters,
+                        allowDownload: true
+                    )
+                )
+                let updates = await DownloadCoordinator.shared.updates(for: jobID)
+                for await snapshot in updates {
+                    switch snapshot.state {
+                    case .queued, .downloading:
+                        progress[record.id] = OfflineDownloadProgress(
+                            completedImages: snapshot.completedImages,
+                            totalImages: snapshot.totalImages
+                        )
+                    case .completed, .failed, .cancelled:
+                        progress[record.id] = nil
+                        await reload()
+                        return
                     }
                 }
-            )
-            progress[record.id] = nil
-            await reload()
+            } catch {
+                progress[record.id] = nil
+                await reload()
+            }
         }
     }
 
@@ -215,7 +235,7 @@ private struct OfflineReaderView: View {
     }
 }
 
-private struct OfflineDownloadSheet: View {
+struct OfflineDownloadSheet: View {
     let record: OfflineComicRecord
     let onConfirm: (AppImageQuality) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -290,5 +310,6 @@ private struct OfflineDownloadSheet: View {
                 }
             }
         }
+            .accessibilityIdentifier("offlineDownloadSheet")
     }
 }

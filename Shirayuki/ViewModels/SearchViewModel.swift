@@ -13,6 +13,8 @@ final class SearchViewModel: ObservableViewModel {
     @Published var totalPages = 1
     @Published var sortMode: ComicSortType = .dd
     @Published var sortAscending = false
+    @Published private(set) var lastLoadedPageIDs: [String] = []
+    @Published private(set) var lastEvaluatedBlockedRevision: UInt64 = 0
     
     var searchHistory: [String] {
         UserDefaults.standard.stringArray(forKey: "search_history") ?? []
@@ -65,6 +67,8 @@ final class SearchViewModel: ObservableViewModel {
             } else {
                 results.append(contentsOf: result.docs)
             }
+            lastLoadedPageIDs = result.docs.map(\.id)
+            currentPage = result.page
             totalPages = result.pages
         } catch {
             results = []
@@ -73,9 +77,28 @@ final class SearchViewModel: ObservableViewModel {
     }
     
     func loadNextPage() async {
-        guard currentPage < totalPages else { return }
+        guard !isLoading, currentPage < totalPages else { return }
         currentPage += 1
         await search()
+    }
+
+    func visibleComics(for snapshot: BlockedWordSnapshot) -> [ComicSummary] {
+        PicaAgentAdapters.visibleComics(results, snapshot: snapshot)
+    }
+
+    func shouldLoadFilteredPage(for snapshot: BlockedWordSnapshot) -> Bool {
+        guard !isLoading, currentPage < totalPages else { return false }
+        let latestIDs = Set(lastLoadedPageIDs)
+        let latest = results.filter { latestIDs.contains($0.id) }
+        return !latest.isEmpty && PicaAgentAdapters.visibleComics(latest, snapshot: snapshot).isEmpty
+    }
+
+    func resultsHiddenAtTerminal(for snapshot: BlockedWordSnapshot) -> Bool {
+        !results.isEmpty && currentPage >= totalPages && visibleComics(for: snapshot).isEmpty
+    }
+
+    func recordBlockedRevision(_ revision: UInt64) {
+        lastEvaluatedBlockedRevision = revision
     }
     
     func loadHotKeywords() async {

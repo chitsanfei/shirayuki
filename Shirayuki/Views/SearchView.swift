@@ -4,6 +4,8 @@ import SwiftUI
 struct SearchView: View {
     @StateObject private var viewModel = SearchViewModel()
     @ObservedObject private var localization = AppLocalization.shared
+    @EnvironmentObject private var navigation: AppNavigationCoordinator
+    @EnvironmentObject private var blockedWords: UserDefaultsBlockedWordRepository
     @State private var selectedComicId: String?
     @State private var showFilters = false
     
@@ -35,11 +37,26 @@ struct SearchView: View {
             }
             .sheet(isPresented: $showFilters) {
                 SearchFiltersSheet(viewModel: viewModel)
+                    .agentSurfaceHost(
+                        context: .nonSettingsSheet(
+                            parent: .tab(AppTab.search.rawValue),
+                            kind: "searchFilters"
+                        )
+                    )
             }
             .task {
                 guard viewModel.hotKeywords.isEmpty else { return }
                 await viewModel.loadHotKeywords()
             }
+        }
+        .agentPageContext(.tab(AppTab.search.rawValue))
+        .onChange(of: navigation.pendingComicID) { _, _ in
+            guard navigation.currentContext == .tab(AppTab.search.rawValue),
+                  let comicID = navigation.consumePendingComic() else { return }
+            selectedComicId = comicID
+        }
+        .onChange(of: blockedWords.currentSnapshot.revision) { _, revision in
+            viewModel.recordBlockedRevision(revision)
         }
     }
     
@@ -156,53 +173,61 @@ struct SearchView: View {
     }
     
     private var resultsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let snapshot = blockedWords.currentSnapshot
+        let visibleComics = viewModel.visibleComics(for: snapshot)
+        return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text(localization.text("search.results"))
                     .font(.system(size: 22, weight: .bold))
                 Spacer()
-                if viewModel.isLoading, !viewModel.comics.isEmpty {
+                if viewModel.isLoading, !visibleComics.isEmpty {
                     ProgressView()
                 }
             }
             .padding(.horizontal, 16)
-            
-            if let errorMessage = viewModel.errorMessage, viewModel.comics.isEmpty, !viewModel.isLoading {
+
+            if let errorMessage = viewModel.errorMessage, visibleComics.isEmpty, !viewModel.isLoading {
                 contentErrorState(message: errorMessage)
-            } else if viewModel.comics.isEmpty, viewModel.isLoading {
+            } else if viewModel.results.isEmpty, viewModel.isLoading {
                 ComicSelectionGridSkeleton()
                     .padding(.horizontal, 16)
-            } else if viewModel.comics.isEmpty {
-                emptyState
+            } else if visibleComics.isEmpty {
+                emptyState(hiddenByFilter: viewModel.resultsHiddenAtTerminal(for: snapshot))
             } else {
-                ComicSelectionGrid(viewModel.comics, id: \.id) { comic in
+                ComicSelectionGrid(visibleComics, id: \.id) { comic in
                     SearchComicCard(comic: comic)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             selectedComicId = comic.id
                         }
                         .onAppear {
-                            guard comic.id == viewModel.comics.last?.id else { return }
-                            Task {
-                                await viewModel.loadNextPage()
-                            }
+                            guard comic.id == visibleComics.last?.id else { return }
+                            Task { await viewModel.loadNextPage() }
                         }
                 }
                 .padding(.horizontal, 16)
             }
+
+            if viewModel.shouldLoadFilteredPage(for: snapshot) {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .onAppear { Task { await viewModel.loadNextPage() } }
+            }
         }
     }
     
-    private var emptyState: some View {
+    private func emptyState(hiddenByFilter: Bool) -> some View {
         VStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 44))
                 .foregroundStyle(.secondary.opacity(0.45))
-            Text(localization.text("search.empty.title"))
+            Text(localization.text(hiddenByFilter ? "contentFilter.resultsHidden" : "search.empty.title"))
                 .font(.system(size: 18, weight: .semibold))
-            Text(localization.text("search.empty.subtitle"))
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
+            if !hiddenByFilter {
+                Text(localization.text("search.empty.subtitle"))
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 220)
         .padding(.horizontal, 16)
@@ -293,5 +318,6 @@ struct SearchFiltersSheet: View {
                 }
             }
         }
+            .accessibilityIdentifier("searchFiltersSheet")
     }
 }

@@ -2,6 +2,7 @@ import XCTest
 @testable import Shirayuki
 
 /// Verifies route validation, ordering, editability, and host replacement.
+@MainActor
 final class ProxyConfigurationTests: XCTestCase {
     func testOfficialRouteIsFixed() {
         XCTAssertEqual(AppProxyRule.official.id, "picacomic")

@@ -312,6 +312,28 @@ struct SettingsSheet: View {
             Form {
                 Section {
                     NavigationLink {
+                        AgentSettingsView()
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "sparkles",
+                            title: localization.text("settings.agent"),
+                            subtitle: localization.text("settings.agent.subtitle")
+                        )
+                    }
+                    .accessibilityIdentifier("agentSettingsLink")
+
+                    NavigationLink {
+                        BlockedWordsSettingsView()
+                    } label: {
+                        SettingsCategoryRow(
+                            icon: "hand.raised.fill",
+                            title: localization.text("settings.contentFilter"),
+                            subtitle: localization.text("settings.contentFilter.subtitle")
+                        )
+                    }
+                    .accessibilityIdentifier("contentFilterSettingsLink")
+
+                    NavigationLink {
                         AppearanceSettingsView(viewModel: viewModel)
                     } label: {
                         SettingsCategoryRow(
@@ -320,6 +342,7 @@ struct SettingsSheet: View {
                             subtitle: localization.text("settings.appearance.subtitle")
                         )
                     }
+                    .accessibilityIdentifier("appearanceSettingsLink")
 
                     NavigationLink {
                         RankSettingsView(viewModel: viewModel)
@@ -360,6 +383,7 @@ struct SettingsSheet: View {
                             subtitle: localization.text("settings.cache.subtitle")
                         )
                     }
+                    .accessibilityIdentifier("storageSettingsLink")
 
                     NavigationLink {
                         SourceSettingsView(viewModel: viewModel)
@@ -392,6 +416,8 @@ struct SettingsSheet: View {
                 }
             }
         }
+        .accessibilityIdentifier("settingsSheet")
+        .agentSettingsSuppressed()
     }
 
 }

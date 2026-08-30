@@ -5,6 +5,10 @@ struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @ObservedObject private var localization = AppLocalization.shared
     @ObservedObject private var rankDisplay = AppRankDisplayStore.shared
+    @EnvironmentObject private var navigation: AppNavigationCoordinator
+    @EnvironmentObject private var blockedWords: UserDefaultsBlockedWordRepository
+    @EnvironmentObject private var agentPageContent: AgentPageContentStore
+    @State private var pageContentOwnerID = UUID()
     @State private var selectedComicId: String?
 
     var body: some View {
@@ -32,6 +36,61 @@ struct HomeView: View {
                 await viewModel.loadHome()
             }
         }
+        .agentPageContext(.tab(AppTab.home.rawValue))
+        .onAppear {
+            routePendingReader()
+            consumeAgentComicRoute()
+            publishAgentPageContent()
+        }
+        .onChange(of: navigation.pendingComicID) { _, _ in
+            consumeAgentComicRoute()
+        }
+        .onChange(of: navigation.pendingReaderRequest) { _, _ in
+            routePendingReader()
+        }
+        .onChange(of: navigation.currentContext) { _, context in
+            if context == .tab(AppTab.home.rawValue) {
+                routePendingReader()
+                consumeAgentComicRoute()
+            }
+        }
+        .onChange(of: blockedWords.currentSnapshot.revision) { _, revision in
+            viewModel.recordBlockedRevision(revision)
+            publishAgentPageContent()
+        }
+        .onChange(of: viewModel.comics.map(\.id)) { _, _ in
+            publishAgentPageContent()
+        }
+        .onChange(of: viewModel.selectedMode) { _, _ in
+            publishAgentPageContent()
+        }
+        .onDisappear {
+            agentPageContent.clear(ownerID: pageContentOwnerID)
+        }
+    }
+
+    private func publishAgentPageContent() {
+        let visible = viewModel.visibleComics(for: blockedWords.currentSnapshot)
+        agentPageContent.publish(
+            PicaAgentAdapters.pageContent(
+                source: "home.\(viewModel.selectedMode.rawValue)",
+                title: viewModel.navigationTitle,
+                comics: visible,
+                itemLimit: AgentPageContentSnapshot.maximumComicItems
+            ),
+            ownerID: pageContentOwnerID
+        )
+    }
+
+    private func routePendingReader() {
+        guard let request = navigation.pendingReaderRequest else { return }
+        selectedComicId = request.comicID
+    }
+
+    private func consumeAgentComicRoute() {
+        guard navigation.currentContext == .tab(AppTab.home.rawValue),
+              let comicID = navigation.consumePendingComic() else { return }
+        selectedComicId = comicID
     }
 
     private var modeFilterSection: some View {
@@ -54,26 +113,28 @@ struct HomeView: View {
     }
 
     private var comicsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let snapshot = blockedWords.currentSnapshot
+        let visibleComics = viewModel.visibleComics(for: snapshot)
+        return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text(viewModel.navigationTitle)
                     .font(.system(size: 28, weight: .bold))
                 Spacer()
-                if viewModel.isLoading, !viewModel.comics.isEmpty {
+                if viewModel.isLoading, !visibleComics.isEmpty {
                     ProgressView()
                 }
             }
             .padding(.horizontal, 16)
 
-            if let errorMessage = viewModel.errorMessage, viewModel.comics.isEmpty, !viewModel.isLoading {
+            if let errorMessage = viewModel.errorMessage, visibleComics.isEmpty, !viewModel.isLoading {
                 contentErrorState(message: errorMessage)
             } else if viewModel.comics.isEmpty, viewModel.isLoading {
                 ComicSelectionGridSkeleton()
                     .padding(.horizontal, 16)
-            } else if viewModel.comics.isEmpty {
-                emptyState
+            } else if visibleComics.isEmpty {
+                emptyState(hiddenByFilter: viewModel.resultsHiddenAtTerminal(for: snapshot))
             } else {
-                ComicSelectionGrid(viewModel.comics, id: \.id) { comic in
+                ComicSelectionGrid(visibleComics, id: \.id) { comic in
                     Group {
                         if viewModel.selectedMode == .latest {
                             ComicCard(comic: comic)
@@ -90,27 +151,33 @@ struct HomeView: View {
                         selectedComicId = comic.id
                     }
                     .onAppear {
-                        guard comic.id == viewModel.comics.last?.id else { return }
-                        Task {
-                            await viewModel.loadNextPage()
-                        }
+                        guard comic.id == visibleComics.last?.id else { return }
+                        Task { await viewModel.loadNextPage() }
                     }
                 }
                 .padding(.horizontal, 16)
             }
+
+            if viewModel.shouldLoadFilteredPage(for: snapshot) {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .onAppear { Task { await viewModel.loadNextPage() } }
+            }
         }
     }
 
-    private var emptyState: some View {
+    private func emptyState(hiddenByFilter: Bool) -> some View {
         VStack(spacing: 10) {
             Image(systemName: "book.closed")
                 .font(.system(size: 44, weight: .regular))
                 .foregroundStyle(.secondary.opacity(0.45))
-            Text(localization.text("home.empty.title"))
+            Text(localization.text(hiddenByFilter ? "contentFilter.resultsHidden" : "home.empty.title"))
                 .font(.system(size: 18, weight: .semibold))
-            Text(localization.text("home.empty.subtitle"))
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
+            if !hiddenByFilter {
+                Text(localization.text("home.empty.subtitle"))
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 220)
         .padding(.horizontal, 16)

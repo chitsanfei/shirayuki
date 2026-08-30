@@ -555,35 +555,46 @@ final class ReaderViewModel: ObservableViewModel {
         guard !offlineOnly,
               !images.isEmpty,
               isLastPage,
+              comic.allowDownload,
               AppReaderSettingsStore.shared.downloadsWhileReading,
               let chapter = currentChapter,
               !offlineChapterIDs.contains(chapter.id),
               scheduledAutomaticDownloadChapterIDs.insert(chapter.id).inserted else { return }
-        let comic = comic
-        let allChapters = chapters
-        let quality = AppImageQuality.stored
+        let request = DownloadRequest(
+            comicID: comic.id,
+            title: comic.title,
+            thumbURL: comic.thumb.url,
+            createdAt: comic.createdAt,
+            updatedAt: comic.updatedAt,
+            chapters: [chapter],
+            quality: AppImageQuality.stored,
+            allChapters: chapters,
+            allowDownload: comic.allowDownload
+        )
         chapterDownloadProgress[chapter.id] = OfflineDownloadProgress(
             completedImages: 0,
             totalImages: 0
         )
-        Task(priority: .utility) { [weak self] in
+        Task(priority: .utility) { @MainActor [weak self] in
             do {
-                try await OfflineComicStore.shared.download(
-                    comicID: comic.id,
-                    title: comic.title,
-                    thumbURL: comic.thumb.url,
-                    createdAt: comic.createdAt,
-                    updatedAt: comic.updatedAt,
-                    chapters: [chapter],
-                    quality: quality,
-                    allChapters: allChapters,
-                    progress: { progress in
-                        Task { @MainActor [weak self] in
-                            self?.chapterDownloadProgress[chapter.id] = progress
-                        }
+                let jobID = try await DownloadCoordinator.shared.start(request: request)
+                let updates = await DownloadCoordinator.shared.updates(for: jobID)
+                for await snapshot in updates {
+                    guard let self else { return }
+                    switch snapshot.state {
+                    case .queued, .downloading:
+                        self.chapterDownloadProgress[chapter.id] = OfflineDownloadProgress(
+                            completedImages: snapshot.completedImages,
+                            totalImages: snapshot.totalImages
+                        )
+                    case .completed:
+                        self.finishAutomaticDownload(chapterID: chapter.id)
+                        return
+                    case .failed, .cancelled:
+                        self.failAutomaticDownload(chapterID: chapter.id)
+                        return
                     }
-                )
-                self?.finishAutomaticDownload(chapterID: chapter.id)
+                }
             } catch {
                 self?.failAutomaticDownload(chapterID: chapter.id)
             }

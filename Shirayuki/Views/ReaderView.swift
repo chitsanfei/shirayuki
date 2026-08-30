@@ -12,6 +12,7 @@ struct ReaderView: View {
     @StateObject var viewModel: ReaderViewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var agentRuntime: AgentRuntime
     @State private var showChapterSheet = false
     @State private var showReaderSettings = false
     
@@ -65,11 +66,18 @@ struct ReaderView: View {
             #endif
             .sheet(isPresented: $showChapterSheet) {
                 ChapterListSheet(viewModel: viewModel)
+                    .agentSurfaceHost(
+                        context: .nonSettingsSheet(parent: readerContext, kind: "chapterList")
+                    )
             }
             .sheet(isPresented: $showReaderSettings) {
                 ReaderSettingsSheet(viewModel: viewModel)
+                    .agentSurfaceHost(
+                        context: .nonSettingsSheet(parent: readerContext, kind: "readerSettings")
+                    )
             }
             .task {
+                agentRuntime.registerReaderSurface(viewModel)
                 viewModel.startInitialLoadIfNeeded()
             }
             .onChange(of: scenePhase) { _, phase in
@@ -83,9 +91,21 @@ struct ReaderView: View {
                 }
             }
             .onDisappear {
+                agentRuntime.unregisterReaderSurface(viewModel)
                 viewModel.cancelOngoingWork()
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("readerSurface")
         }
+        .agentSurfaceHost(context: readerContext)
+    }
+
+    private var readerContext: AgentPageContext {
+        .reader(
+            comicID: viewModel.comic.id,
+            chapterID: viewModel.currentChapter?.id,
+            pageIndex: viewModel.currentPageIndex
+        )
     }
 
     @ViewBuilder
@@ -328,7 +348,7 @@ struct ZoomableComicImage: View {
             ComicAsyncImage(
                 url: url,
                 offlineComicID: comicID,
-        offlineChapterID: chapterID,
+                offlineChapterID: chapterID,
                 expectedOfflineImageCount: expectedImageCount,
                 forceOffline: forceOffline
             )
@@ -390,6 +410,8 @@ struct ZoomableComicImage: View {
 
 /// Reader header containing navigation and settings controls.
 struct ReaderTopToolbar: View {
+    @EnvironmentObject private var appearance: AppAppearanceStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var viewModel: ReaderViewModel
     let topInset: CGFloat
     let isVisible: Bool
@@ -404,6 +426,8 @@ struct ReaderTopToolbar: View {
     }
     
     var body: some View {
+        let profile = appearance.motionProfile(systemReduceMotion: reduceMotion)
+        let usesSpatialMotion = profile.mode == .standard
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 ReaderToolbarIconButton(systemImage: "chevron.left", action: onBack)
@@ -437,31 +461,36 @@ struct ReaderTopToolbar: View {
                     } label: {
                         ReaderToolbarOrb(systemImage: "book.pages")
                     }
-                    
+
                     ReaderToolbarIconButton(systemImage: "gearshape.fill", action: onSettings)
+                        .accessibilityIdentifier("readerSettingsButton")
                 }
             }
             .padding(.horizontal, 16)
             .padding(.top, topInset + 4)
             .frame(height: topInset + ReaderLayout.topToolbarHeight, alignment: .top)
-            
+
             Spacer()
         }
-        .offset(y: isVisible ? 0 : -(topInset + ReaderLayout.topToolbarHeight + 16))
+        .offset(y: isVisible || !usesSpatialMotion ? 0 : -(topInset + ReaderLayout.topToolbarHeight + 16))
         .opacity(isVisible ? 1 : 0)
-        .scaleEffect(isVisible ? 1 : 0.96, anchor: .top)
-        .animation(.interpolatingSpring(stiffness: 230, damping: 25), value: isVisible)
+        .scaleEffect(isVisible || !usesSpatialMotion ? 1 : 0.96, anchor: .top)
+        .animation(profile.readerToolbarAnimation, value: isVisible)
     }
 }
 
 /// Reader footer containing progress, chapter, and playback controls.
 struct ReaderBottomToolbar: View {
+    @EnvironmentObject private var appearance: AppAppearanceStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var viewModel: ReaderViewModel
     let bottomInset: CGFloat
     let isVisible: Bool
     let onChapterTap: () -> Void
     
     var body: some View {
+        let profile = appearance.motionProfile(systemReduceMotion: reduceMotion)
+        let usesSpatialMotion = profile.mode == .standard
         VStack {
             Spacer()
             
@@ -508,6 +537,7 @@ struct ReaderBottomToolbar: View {
                             }
                             
                             ReaderToolbarIconButton(systemImage: "list.bullet", action: onChapterTap)
+                                .accessibilityIdentifier("readerChapterButton")
                             
                             ReaderToolbarIconButton(
                                 systemImage: viewModel.isAutoTurning ? "pause.fill" : "play.fill"
@@ -539,10 +569,10 @@ struct ReaderBottomToolbar: View {
                 .padding(.bottom, bottomInset + 12)
             }
         }
-        .offset(y: isVisible ? 0 : ReaderLayout.bottomToolbarHeight)
+        .offset(y: isVisible || !usesSpatialMotion ? 0 : ReaderLayout.bottomToolbarHeight)
         .opacity(isVisible ? 1 : 0)
-        .scaleEffect(isVisible ? 1 : 0.96, anchor: .bottom)
-        .animation(.interpolatingSpring(stiffness: 230, damping: 25), value: isVisible)
+        .scaleEffect(isVisible || !usesSpatialMotion ? 1 : 0.96, anchor: .bottom)
+        .animation(profile.readerToolbarAnimation, value: isVisible)
     }
 }
 
@@ -587,6 +617,8 @@ struct ChapterListSheet: View {
                 }
             }
         }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("readerChapterSheet")
     }
 }
 
@@ -694,6 +726,8 @@ struct ReaderSettingsSheet: View {
                 }
             }
         }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("readerSettingsSheet")
     }
 }
 

@@ -10,6 +10,8 @@ final class HomeViewModel: ObservableViewModel {
     @Published var currentPage = 1
     @Published var totalPages = 1
     @Published var selectedMode: HomeDisplayMode = .latest
+    @Published private(set) var lastLoadedPageIDs: [String] = []
+    @Published private(set) var lastEvaluatedBlockedRevision: UInt64 = 0
 
     var navigationTitle: String {
         selectedMode.displayName
@@ -50,6 +52,7 @@ final class HomeViewModel: ObservableViewModel {
             } else {
                 comics.append(contentsOf: result.docs)
             }
+            lastLoadedPageIDs = result.docs.map(\.id)
             currentPage = result.page
             totalPages = result.pages
         } catch {
@@ -68,6 +71,25 @@ final class HomeViewModel: ObservableViewModel {
         guard selectedMode == .latest else { return }
         currentPage += 1
         await loadComics()
+    }
+
+    func visibleComics(for snapshot: BlockedWordSnapshot) -> [ComicSummary] {
+        PicaAgentAdapters.visibleComics(comics, snapshot: snapshot)
+    }
+
+    func shouldLoadFilteredPage(for snapshot: BlockedWordSnapshot) -> Bool {
+        guard !isLoading, selectedMode == .latest, currentPage < totalPages else { return false }
+        let latestIDs = Set(lastLoadedPageIDs)
+        let latest = comics.filter { latestIDs.contains($0.id) }
+        return !latest.isEmpty && PicaAgentAdapters.visibleComics(latest, snapshot: snapshot).isEmpty
+    }
+
+    func resultsHiddenAtTerminal(for snapshot: BlockedWordSnapshot) -> Bool {
+        !comics.isEmpty && currentPage >= totalPages && visibleComics(for: snapshot).isEmpty
+    }
+
+    func recordBlockedRevision(_ revision: UInt64) {
+        lastEvaluatedBlockedRevision = revision
     }
 
     private func makePayload(page: Int) -> ComicsPayload {

@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "Shirayuki",
-    platforms: [.iOS(.v16), .macOS(.v14)],
+    platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "Shirayuki", targets: ["Shirayuki"]),
     ],
@@ -11,7 +11,7 @@ let package = Package(
         .target(
             name: "Shirayuki",
             path: "Shirayuki",
-            exclude: ["Assets.xcassets"],
+            exclude: ["Assets.xcassets", "ShirayukiApp.swift"],
             resources: [.process("NetworkRoutes.json")]
         ),
         .testTarget(

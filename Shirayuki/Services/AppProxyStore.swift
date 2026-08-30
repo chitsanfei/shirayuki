@@ -127,17 +127,20 @@ nonisolated struct AppProxyRule: Equatable, Identifiable, Sendable {
         }
     }
 
-    /// Loads bundled routes from the packaged JSON resource.
+    /// Loads bundled route definitions from the packaged JSON resource.
+    @MainActor
     static func loadBundledRules() -> [AppProxyRule] {
         #if SWIFT_PACKAGE
-        let bundle = Bundle.module
-        #else
-        let bundle = Bundle.main
-        #endif
-        guard let url = bundle.url(forResource: "NetworkRoutes", withExtension: "json"),
+        guard let url = Bundle.module.url(forResource: "NetworkRoutes", withExtension: "json"),
               let data = try? Data(contentsOf: url) else {
             return []
         }
+        #else
+        guard let url = Bundle.main.url(forResource: "NetworkRoutes", withExtension: "json"),
+              let data = try? Data(contentsOf: url) else {
+            return []
+        }
+        #endif
         return decodeBundledRules(from: data)
     }
 }

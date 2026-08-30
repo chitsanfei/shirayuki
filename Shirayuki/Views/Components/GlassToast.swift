@@ -21,6 +21,8 @@ private struct GlassToastModifier: ViewModifier {
     let message: String?
     let systemImage: String
     let bottomPadding: CGFloat
+    @EnvironmentObject private var appearance: AppAppearanceStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .bottom) {
@@ -43,20 +45,12 @@ private struct GlassToastModifier: ViewModifier {
                 .shadow(color: .black.opacity(0.24), radius: 18, x: 0, y: 9)
                 .padding(.horizontal, 24)
                 .padding(.bottom, bottomPadding)
-                .transition(
-                    .asymmetric(
-                        insertion: .scale(scale: 0.72, anchor: .bottom)
-                            .combined(with: .move(edge: .bottom))
-                            .combined(with: .opacity),
-                        removal: .scale(scale: 0.86, anchor: .bottom)
-                            .combined(with: .opacity)
-                    )
-                )
+                .transition(appearance.motionProfile(systemReduceMotion: reduceMotion).toastTransition)
                 .allowsHitTesting(false)
             }
         }
         .animation(
-            .interpolatingSpring(mass: 0.82, stiffness: 210, damping: 18, initialVelocity: 0.28),
+            appearance.motionProfile(systemReduceMotion: reduceMotion).toastAnimation,
             value: message
         )
     }

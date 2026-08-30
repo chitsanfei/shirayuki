@@ -35,14 +35,17 @@
   - 章节切换、页码显示与 Slider 跳转
   - 自动翻页（2 ~ 60 秒可调）
   - 菜单锁定、阅读进度自动保存、继续阅读
+  - 在线 / 离线阅读，支持按章节下载、下载进度与本地书库
 - **个人中心**：用户信息、EXP / 等级、收藏浏览、每日打卡
-- **设置**：系统 / 浅色 / 深色主题、多语言切换（简中 / 繁中 / 英 / 日）、API 线路切换、图片质量切换、缓存清理
+- **设置**：主题、多语言、动画模式、Agent 浮动按钮样式/透明度、远程漫画屏蔽词与只选词、API 线路与图片质量、缓存与 Agent 会话管理，以及 OpenAI Chat Completions / Responses、Anthropic Messages 兼容配置；默认使用 DeepSeek `deepseek-chat`，支持 Ask / YOLO、风险权限授权、自动上下文压缩开关和 64–384 KiB 阈值
+- **Agent 助手**：所有非设置页面提供可拖动浮动入口；Codex 风格对话实时显示 user/assistant/tool 消息及具体 transport 错误，助手回复安全解析 Markdown；Agent 可读取首页、日/周/月榜、分类漫画的默认前 12 项，页面已加载较多结果时受最近 100 项滑动窗口约束，以及当前漫画详情；获授权后可修改屏蔽词/只选词、收藏状态并删除离线漫画。Reader 当前页图片始终单独确认
+- **本地 Agent 历史**：会话按匿名用户/Pica 账号隔离，可恢复、逐个删除或从 Agent 设置页二次确认后全部删除
 
 ## 文件结构
 
 ```text
 +-- Shirayuki                 <- App 主体源码
-│   +-- Models/              <- 数据模型（部分内联于 PicaAPI.swift）
+│   +-- Agent/               <- Agent Domain、Application 与 Infrastructure adapters
 │   +-- Network/             <- API 客户端、DTO、服务、图片加载
 │   +-- Services/            <- 全局状态、Token/凭证存储、阅读进度、主题/语言/图片质量
 │   +-- ViewModels/          <- 各页面视图模型
@@ -64,6 +67,13 @@
 - 将下载得到的安装包导入上述工具，并使用你自己的 Apple ID 或对应证书完成签名。
 - 签名完成后，将应用安装到 iPhone / iPad / Mac 即可使用。
 
+## Agent 与隐私
+
+- Pica 登录凭据与 LLM API Key 分别保存在独立的 Keychain account 中，不会互相复用。
+- Agent 只有在用户明确确认后才会读取并发送当前阅读页图片。
+- 使用自定义 OpenAI-compatible 或 Anthropic-compatible endpoint 时，应用会显示目标 host 并要求隐私确认；仅发送用户请求和 typed command 所需的最小化、已脱敏上下文与结果，当前阅读页图片仍需另行明确确认。
+- Agent 会话历史保存在本机 Application Support，并按匿名用户/Pica 账号隔离；应用生成的 API Key、Token、图片、data URL 与 capability 不写入历史。用户主动输入的文本会原样保存。
+
 ## 开发说明
 
 > [!WARNING]
@@ -71,12 +81,11 @@
 > 使用自行承担风险。
 
 - 纯原生 API 客户端，所有数据均通过官方 REST API 获取。
-- 支持 iOS 16+ / macOS 14+，构建工具要求 Swift 5.9+。
+- 支持 iOS 17+ / macOS 14+，构建工具要求 Swift 5.9+。
 
 待修复 & 添加：
 
 - [ ] 添加 AI 翻译功能
-- [ ] 添加离线下载和阅读功能
 - [ ] 阅读页稳定性优化
 - [ ] 评论区显示，懒加载和界面性能
 
