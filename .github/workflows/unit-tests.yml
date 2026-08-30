@@ -45,7 +45,7 @@ jobs:
       - name: SwiftPM compile guard
         # 廉价的 Package.swift / Xcode 双轨漂移护栏：确保 SwiftPM target 也能编译。
         # 若此处失败，通常是 Package.swift 与 .xcodeproj 的源文件/平台配置不一致。
-        run: swift build
+        run: swift build -Xswiftc -default-isolation -Xswiftc MainActor
 
       - name: Pick iPhone simulator
         id: simulator
