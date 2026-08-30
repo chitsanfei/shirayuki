@@ -37,9 +37,9 @@
   - 菜单锁定、阅读进度自动保存、继续阅读
   - 在线 / 离线阅读，支持按章节下载、下载进度与本地书库
 - **个人中心**：用户信息、EXP / 等级、收藏浏览、每日打卡
-- **设置**：主题、多语言、动画模式、Agent 浮动按钮样式/透明度、远程漫画屏蔽词与只选词、API 线路与图片质量、缓存与 Agent 会话储存管理，以及 OpenAI-compatible / Anthropic-compatible Agent 配置；默认使用 DeepSeek `deepseek-chat`，支持 Ask / YOLO、自动上下文压缩开关和 64–384 KiB 阈值
-- **Agent 助手**：所有非设置页面提供可拖动浮动入口；Codex 风格对话实时显示 user/assistant/tool 消息，助手回复安全解析 Markdown；Agent 可读取首页、日/周/月榜、分类漫画的默认前 12 项，页面已加载较多结果时受最近 100 项滑动窗口约束，以及当前漫画详情；Reader 可经确认发送当前页图片给视觉模型。Ask 在副作用前确认，YOLO 自动执行下载、点赞、收藏和屏蔽词修改；图片分享始终单独确认
-- **本地 Agent 历史**：会话按匿名用户/Pica 账号隔离，可恢复、逐个删除或从储存页全部删除
+- **设置**：主题、多语言、动画模式、Agent 浮动按钮样式/透明度、远程漫画屏蔽词与只选词、API 线路与图片质量、缓存与 Agent 会话管理，以及 OpenAI Chat Completions / Responses、Anthropic Messages 兼容配置；默认使用 DeepSeek `deepseek-chat`，支持 Ask / YOLO、风险权限授权、自动上下文压缩开关和 64–384 KiB 阈值
+- **Agent 助手**：所有非设置页面提供可拖动浮动入口；Codex 风格对话实时显示 user/assistant/tool 消息及具体 transport 错误，助手回复安全解析 Markdown；Agent 可读取首页、日/周/月榜、分类漫画的默认前 12 项，页面已加载较多结果时受最近 100 项滑动窗口约束，以及当前漫画详情；获授权后可修改屏蔽词/只选词、收藏状态并删除离线漫画。Reader 当前页图片始终单独确认
+- **本地 Agent 历史**：会话按匿名用户/Pica 账号隔离，可恢复、逐个删除或从 Agent 设置页二次确认后全部删除
 
 ## 文件结构
 

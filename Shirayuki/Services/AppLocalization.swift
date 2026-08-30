@@ -1146,11 +1146,41 @@ nonisolated private enum AppLocalizationCatalog {
             .english: "Current API key cleared",
             .japanese: "現在のAPIキーを消去しました"
         ],
+        "settings.agent.clearToken": [
+            .simplifiedChinese: "清除 token",
+            .traditionalChinese: "清除 token",
+            .english: "Clear Token",
+            .japanese: "トークンを消去"
+        ],
+        "settings.agent.clearToken.confirm": [
+            .simplifiedChinese: "确认清除当前 Provider 保存的 API token？",
+            .traditionalChinese: "確認清除目前 Provider 儲存的 API token？",
+            .english: "Clear the API token saved for the current provider?",
+            .japanese: "現在のProviderに保存されたAPIトークンを消去しますか？"
+        ],
+        "settings.agent.clearToken.error": [
+            .simplifiedChinese: "无法清除 API token",
+            .traditionalChinese: "無法清除 API token",
+            .english: "Could not clear the API token",
+            .japanese: "APIトークンを消去できません"
+        ],
         "settings.agent.reset": [
             .simplifiedChinese: "重置为默认配置",
             .traditionalChinese: "重設為預設設定",
             .english: "Reset to Defaults",
             .japanese: "既定値にリセット"
+        ],
+        "settings.agent.reset.confirm": [
+            .simplifiedChinese: "确认重置 Provider、模型、Endpoint 和 Agent 行为设置？保存的 API token 不会被清除。",
+            .traditionalChinese: "確認重設 Provider、模型、Endpoint 與 Agent 行為設定？已儲存的 API token 不會被清除。",
+            .english: "Reset provider, model, endpoint, and Agent behavior settings? Saved API tokens are not cleared.",
+            .japanese: "Provider、モデル、Endpoint、Agent動作設定をリセットしますか？保存済みAPIトークンは消去されません。"
+        ],
+        "settings.agent.action.error": [
+            .simplifiedChinese: "操作失败",
+            .traditionalChinese: "操作失敗",
+            .english: "Action failed",
+            .japanese: "操作に失敗しました"
         ],
         "settings.agent.resetDone": [
             .simplifiedChinese: "已重置为默认配置",
@@ -1181,6 +1211,24 @@ nonisolated private enum AppLocalizationCatalog {
             .traditionalChinese: "YOLO 會自動執行下載、按讚、收藏與封鎖詞修改；傳送目前閱讀頁圖片仍需確認。",
             .english: "YOLO auto-executes downloads, likes, favorites, and blocked-word changes. Sending the current page image still requires confirmation.",
             .japanese: "YOLOはダウンロード、いいね、お気に入り、ブロックワード変更を自動実行します。現在ページの画像送信は引き続き確認が必要です。"
+        ],
+        "settings.agent.riskAuthorization": [
+            .simplifiedChinese: "授权 Agent 对风险权限控制",
+            .traditionalChinese: "授權 Agent 控制風險權限",
+            .english: "Authorize Agent Risk Controls",
+            .japanese: "Agentのリスク権限制御を許可"
+        ],
+        "settings.agent.riskAuthorization.footer": [
+            .simplifiedChinese: "允许 Agent 请求修改屏蔽词/只选词、收藏状态，以及取消或删除已下载漫画。Ask 模式仍会逐次确认。",
+            .traditionalChinese: "允許 Agent 請求修改封鎖詞/只選詞、收藏狀態，以及取消或刪除已下載漫畫。Ask 模式仍會逐次確認。",
+            .english: "Allows Agent to request filter-word and favorite changes, and cancel or delete downloads. Ask mode still confirms each action.",
+            .japanese: "フィルターワードやお気に入りの変更、ダウンロードの取消・削除をAgentに許可します。Askモードでは各操作を確認します。"
+        ],
+        "agent.state.risk_authorization_required": [
+            .simplifiedChinese: "设置中未授权 Agent 风险权限控制",
+            .traditionalChinese: "設定中未授權 Agent 風險權限制御",
+            .english: "Agent risk controls are not authorized in Settings",
+            .japanese: "設定でAgentのリスク権限制御が許可されていません"
         ],
         "settings.agent.toolCallLimit": [
             .simplifiedChinese: "每轮 Tool Call 上限",
@@ -2118,9 +2166,6 @@ nonisolated private enum AppLocalizationCatalog {
         "settings.agent.history": [
             .simplifiedChinese: "Agent 会话", .traditionalChinese: "Agent 會話", .english: "Agent Sessions", .japanese: "Agent セッション"
         ],
-        "settings.agent.history.privacy": [
-            .simplifiedChinese: "历史保存在本机。用户输入按原样保存，应用无法识别你自行粘贴的秘密。", .traditionalChinese: "歷史儲存在本機。使用者輸入按原樣儲存，應用程式無法識別你自行貼上的秘密。", .english: "History stays on this device. User text is stored verbatim; pasted secrets are not detected.", .japanese: "履歴は端末内に保存されます。入力内容はそのまま保存され、貼り付けた秘密は検出されません。"
-        ],
         "settings.agent.history.count": [
             .simplifiedChinese: "会话数量", .traditionalChinese: "會話數量", .english: "Session Count", .japanese: "セッション数"
         ],
@@ -2168,6 +2213,36 @@ nonisolated private enum AppLocalizationCatalog {
         ],
         "agent.state.agent_error": [
             .simplifiedChinese: "Agent 请求失败", .traditionalChinese: "Agent 請求失敗", .english: "Agent request failed", .japanese: "Agent リクエストに失敗しました"
+        ],
+        "agent.state.transport_configurationRequired": [
+            .simplifiedChinese: "Agent 配置不完整（configurationRequired）", .traditionalChinese: "Agent 設定不完整（configurationRequired）", .english: "Agent configuration is incomplete (configurationRequired)", .japanese: "Agent設定が不完全です（configurationRequired）"
+        ],
+        "agent.state.transport_invalidEndpoint": [
+            .simplifiedChinese: "Agent endpoint 无效（invalidEndpoint）", .traditionalChinese: "Agent endpoint 無效（invalidEndpoint）", .english: "Agent endpoint is invalid (invalidEndpoint)", .japanese: "Agent endpointが無効です（invalidEndpoint）"
+        ],
+        "agent.state.transport_redirectRejected": [
+            .simplifiedChinese: "Agent endpoint 重定向被拒绝（redirectRejected）", .traditionalChinese: "Agent endpoint 重新導向遭拒（redirectRejected）", .english: "Agent endpoint redirect was rejected (redirectRejected)", .japanese: "Agent endpointのリダイレクトを拒否しました（redirectRejected）"
+        ],
+        "agent.state.transport_invalidImage": [
+            .simplifiedChinese: "页面图片无效或过大（invalidImage）", .traditionalChinese: "頁面圖片無效或過大（invalidImage）", .english: "Page image is invalid or too large (invalidImage)", .japanese: "ページ画像が無効または大きすぎます（invalidImage）"
+        ],
+        "agent.state.transport_visionUnsupported": [
+            .simplifiedChinese: "模型不支持图片输入（visionUnsupported）", .traditionalChinese: "模型不支援圖片輸入（visionUnsupported）", .english: "Model does not support image input (visionUnsupported)", .japanese: "モデルは画像入力に対応していません（visionUnsupported）"
+        ],
+        "agent.state.transport_invalidResponse": [
+            .simplifiedChinese: "Provider 返回空响应或未知结构（invalidResponse）", .traditionalChinese: "Provider 回傳空回應或未知結構（invalidResponse）", .english: "Provider returned an empty or unknown response (invalidResponse)", .japanese: "Providerが空または未知形式の応答を返しました（invalidResponse）"
+        ],
+        "agent.state.transport_unauthorized": [
+            .simplifiedChinese: "API 密钥无效或未授权（unauthorized）", .traditionalChinese: "API 金鑰無效或未授權（unauthorized）", .english: "API key is invalid or unauthorized (unauthorized)", .japanese: "APIキーが無効または未承認です（unauthorized）"
+        ],
+        "agent.state.transport_serverError": [
+            .simplifiedChinese: "Provider 返回服务器错误（serverError）", .traditionalChinese: "Provider 回傳伺服器錯誤（serverError）", .english: "Provider returned a server error (serverError)", .japanese: "Providerがサーバーエラーを返しました（serverError）"
+        ],
+        "agent.state.transport_decodingFailed": [
+            .simplifiedChinese: "Provider 响应无法解析（decodingFailed）", .traditionalChinese: "Provider 回應無法解析（decodingFailed）", .english: "Provider response could not be decoded (decodingFailed)", .japanese: "Provider応答を解析できません（decodingFailed）"
+        ],
+        "agent.state.transport_networkFailed": [
+            .simplifiedChinese: "Provider 网络请求失败（networkFailed）", .traditionalChinese: "Provider 網路請求失敗（networkFailed）", .english: "Provider network request failed (networkFailed)", .japanese: "Providerへのネットワーク要求に失敗しました（networkFailed）"
         ],
         "agent.state.step_limit_reached": [
             .simplifiedChinese: "Agent 已达到内部步骤安全上限", .traditionalChinese: "Agent 已達到內部步驟安全上限", .english: "Agent reached the internal step safety limit", .japanese: "Agentは内部ステップ安全上限に達しました"

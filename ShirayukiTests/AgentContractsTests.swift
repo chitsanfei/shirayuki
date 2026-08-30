@@ -403,6 +403,44 @@ final class AgentContractsTests: XCTestCase {
         XCTAssertEqual(state, .downloading)
     }
 
+    @MainActor
+    func testOfflineDeleteRequiresConfirmationAndDeletesKnownComic() async {
+        let item = AgentLibraryItem(
+            comicID: "offline-comic",
+            title: "Offline Comic",
+            chapterCount: 2,
+            imageCount: 10,
+            quality: .high,
+            byteCount: 100,
+            downloadedAt: Date()
+        )
+        var deletedIDs: [String] = []
+        let service = AgentCommandService(
+            libraryProvider: StubAgentLibraryProvider(favorites: [], offline: [item]),
+            sessionIsLoggedIn: { true },
+            deleteOfflineComicProvider: { deletedIDs.append($0) }
+        )
+        _ = await service.execute(.offlineLibrary, sessionID: agentTestSessionID)
+        let command = AgentCommand.deleteOfflineComic(
+            comicID: item.comicID,
+            commandID: "delete-offline"
+        )
+        let confirmation = await service.execute(command, sessionID: agentTestSessionID)
+        XCTAssertEqual(
+            confirmation,
+            .requiresConfirmation(
+                .deleteOfflineComic(comicID: item.comicID, comicTitle: item.title)
+            )
+        )
+        let deleted = await service.execute(
+            command,
+            sessionID: agentTestSessionID,
+            confirmed: true
+        )
+        XCTAssertEqual(deleted, .deletedOfflineComic(comicID: item.comicID))
+        XCTAssertEqual(deletedIDs, [item.comicID])
+    }
+
     private func makeSummary() throws -> ComicSummary {
         let data = Data(
             """

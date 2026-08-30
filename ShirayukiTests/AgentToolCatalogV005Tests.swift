@@ -5,7 +5,7 @@ final class AgentToolCatalogV005Tests: XCTestCase {
     private let catalog = AgentToolCatalog()
 
     func testDefinitionsAndConcreteDecoderAgree() throws {
-        XCTAssertEqual(catalog.definitions.count, 19)
+        XCTAssertEqual(catalog.definitions.count, 24)
         XCTAssertTrue(catalog.definitions.allSatisfy { $0.parametersJSON.contains(#""additionalProperties":false"#) })
         XCTAssertFalse(catalog.definitions.contains { $0.parametersJSON.contains("commandID") })
 
@@ -41,6 +41,25 @@ final class AgentToolCatalogV005Tests: XCTestCase {
             arguments: #"{"word":" Café "}"#
         )).get()
         XCTAssertEqual(parsed.command, .addBlockedWord(word: "Café", commandID: "blocked-call"))
+    }
+
+    func testIncludedMutationAndOfflineDeleteUseEnvelopeCallID() throws {
+        XCTAssertEqual(
+            try catalog.parse(.init(
+                id: "include-call",
+                name: "addIncludedWord",
+                arguments: #"{"word":"Drama"}"#
+            )).get().command,
+            .addIncludedWord(word: "Drama", commandID: "include-call")
+        )
+        XCTAssertEqual(
+            try catalog.parse(.init(
+                id: "delete-call",
+                name: "deleteOfflineComic",
+                arguments: #"{"comic_id":"comic"}"#
+            )).get().command,
+            .deleteOfflineComic(comicID: "comic", commandID: "delete-call")
+        )
     }
 
     private func error(name: String, arguments: String) -> AgentToolParseError? {

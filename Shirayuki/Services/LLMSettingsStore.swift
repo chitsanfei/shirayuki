@@ -43,6 +43,7 @@ final class LLMSettingsStore: ObservableObject {
     nonisolated static let compactThresholdOptionsKiB = [64, 128, 256, 384]
     nonisolated static let defaultToolCallLimit = 10
     nonisolated static let maximumToolCallLimit = 20
+    nonisolated static let defaultRiskAuthorizationEnabled = true
     private static let defaultEndpointString = "https://api.deepseek.com"
 
     private static let providerKey = "llm_provider"
@@ -52,6 +53,7 @@ final class LLMSettingsStore: ObservableObject {
     private static let autoCompactEnabledKey = "agent_auto_compact_enabled"
     private static let autoCompactThresholdKey = "agent_auto_compact_threshold_kib"
     private static let toolCallLimitKey = "agent_tool_call_limit"
+    private static let riskAuthorizationKey = "agent_risk_authorization_enabled"
     private static let customEndpointConfirmedKey = "llm_custom_endpoint_confirmed"
 
     @Published private(set) var provider: LLMProvider
@@ -62,6 +64,7 @@ final class LLMSettingsStore: ObservableObject {
     @Published private(set) var autoCompactEnabled: Bool
     @Published private(set) var autoCompactThresholdKiB: Int
     @Published private(set) var toolCallLimit: Int
+    @Published private(set) var riskAuthorizationEnabled: Bool
 
     private let defaults: UserDefaults
     private var volatileAPIKeys: [String: String] = [:]
@@ -90,6 +93,9 @@ final class LLMSettingsStore: ObservableObject {
             defaults.object(forKey: Self.toolCallLimitKey) as? Int
                 ?? Self.defaultToolCallLimit
         )
+        riskAuthorizationEnabled = defaults.object(forKey: Self.riskAuthorizationKey) == nil
+            ? Self.defaultRiskAuthorizationEnabled
+            : defaults.bool(forKey: Self.riskAuthorizationKey)
 
         let storedModel = defaults.string(forKey: Self.modelKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -125,10 +131,13 @@ final class LLMSettingsStore: ObservableObject {
     }
 
     nonisolated static func requestEndpoint(provider: LLMProvider, baseURL: URL) -> URL {
-        let path = baseURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let path = baseURL.path
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .lowercased()
         switch provider {
         case .openAICompatible:
-            guard !path.hasSuffix("chat/completions") else { return baseURL }
+            guard !path.hasSuffix("chat/completions"),
+                  !path.hasSuffix("responses") else { return baseURL }
             return baseURL
                 .appendingPathComponent("chat")
                 .appendingPathComponent("completions")
@@ -197,6 +206,7 @@ final class LLMSettingsStore: ObservableObject {
         autoCompactEnabled: Bool = LLMSettingsStore.defaultAutoCompactEnabled,
         autoCompactThresholdKiB: Int = LLMSettingsStore.defaultAutoCompactThresholdKiB,
         toolCallLimit: Int = LLMSettingsStore.defaultToolCallLimit,
+        riskAuthorizationEnabled: Bool = LLMSettingsStore.defaultRiskAuthorizationEnabled,
         privacyConfirmed: Bool = false
     ) -> LLMSettingsApplyResult {
         let model = model.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -219,6 +229,7 @@ final class LLMSettingsStore: ObservableObject {
         )
         self.toolCallLimit = Self.normalizedToolCallLimit(toolCallLimit)
         defaults.set(provider.rawValue, forKey: Self.providerKey)
+        self.riskAuthorizationEnabled = riskAuthorizationEnabled
         defaults.set(model, forKey: Self.modelKey)
         defaults.set(baseURLString, forKey: Self.baseURLKey)
         defaults.set(customEndpointConfirmed, forKey: Self.customEndpointConfirmedKey)
@@ -226,6 +237,7 @@ final class LLMSettingsStore: ObservableObject {
         defaults.set(autoCompactEnabled, forKey: Self.autoCompactEnabledKey)
         defaults.set(self.autoCompactThresholdKiB, forKey: Self.autoCompactThresholdKey)
         defaults.set(self.toolCallLimit, forKey: Self.toolCallLimitKey)
+        defaults.set(riskAuthorizationEnabled, forKey: Self.riskAuthorizationKey)
 
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if !key.isEmpty {
@@ -237,14 +249,15 @@ final class LLMSettingsStore: ObservableObject {
         return .applied
     }
 
-    func clearAPIKey() {
-        guard let endpoint else { return }
+    @discardableResult
+    func clearAPIKey() -> Bool {
+        guard let endpoint else { return false }
         let account = Self.keyAccount(provider: provider, endpoint: endpoint)
         volatileAPIKeys[account] = nil
         KeychainTokenStore.deleteValue(account: account)
         objectWillChange.send()
+        return KeychainTokenStore.readValue(account: account) == nil
     }
-
     func readAPIKey() -> String? {
         guard let configuration else { return nil }
         return volatileAPIKeys[configuration.keyAccount]
@@ -260,6 +273,7 @@ final class LLMSettingsStore: ObservableObject {
         autoCompactEnabled = Self.defaultAutoCompactEnabled
         autoCompactThresholdKiB = Self.defaultAutoCompactThresholdKiB
         toolCallLimit = Self.defaultToolCallLimit
+        riskAuthorizationEnabled = Self.defaultRiskAuthorizationEnabled
         defaults.set(provider.rawValue, forKey: Self.providerKey)
         defaults.set(model, forKey: Self.modelKey)
         defaults.set(baseURLString, forKey: Self.baseURLKey)
@@ -268,6 +282,7 @@ final class LLMSettingsStore: ObservableObject {
         defaults.set(autoCompactEnabled, forKey: Self.autoCompactEnabledKey)
         defaults.set(autoCompactThresholdKiB, forKey: Self.autoCompactThresholdKey)
         defaults.set(toolCallLimit, forKey: Self.toolCallLimitKey)
+        defaults.set(riskAuthorizationEnabled, forKey: Self.riskAuthorizationKey)
     }
 
 

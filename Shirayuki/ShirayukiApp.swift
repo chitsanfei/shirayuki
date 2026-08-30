@@ -50,7 +50,8 @@ struct ShirayukiApp: App {
             pageContent: agentPageContent,
             sessionIsLoggedIn: { appState.isLoggedIn },
             llmConfiguration: { llmSettings.configuration },
-            llmHasAPIKey: { llmSettings.hasAPIKey }
+            llmHasAPIKey: { llmSettings.hasAPIKey },
+            riskAuthorizationEnabled: { llmSettings.riskAuthorizationEnabled }
         )
         let runtime = AgentRuntime(
             sessions: sessions,

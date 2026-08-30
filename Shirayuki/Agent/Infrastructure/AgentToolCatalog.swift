@@ -41,6 +41,7 @@ nonisolated struct AgentToolCatalog: AgentToolCallParsing {
             empty("offlineLibrary", schema: emptySchema, command: .offlineLibrary),
             empty("currentPageContent", schema: emptySchema, command: .currentPageContent),
             empty("listBlockedWords", schema: emptySchema, command: .listBlockedWords),
+            empty("listIncludedWords", schema: emptySchema, command: .listIncludedWords),
             spec(
                 "favoritePage",
                 schema: #"{"type":"object","properties":{"page":{"type":"integer","minimum":1,"maximum":100},"sort":{"type":"string","enum":["dd","da","ld","vd"]}},"additionalProperties":false}"#,
@@ -130,6 +131,21 @@ nonisolated struct AgentToolCatalog: AgentToolCallParsing {
             requiredID("cancelDownload", wireKey: "job_id") {
                 .cancelDownload(jobID: $0, commandID: "")
             },
+            spec(
+                "deleteOfflineComic",
+                schema: #"{"type":"object","properties":{"comic_id":{"type":"string","minLength":1,"maxLength":128}},"required":["comic_id"],"additionalProperties":false}"#,
+                allowed: ["comic_id"],
+                required: ["comic_id"]
+            ) { call in
+                let object = try object(call.arguments)
+                guard let comicID = object["comic_id"] as? String else {
+                    throw AgentToolParseError.invalidType
+                }
+                return .deleteOfflineComic(
+                    comicID: try identifier(comicID),
+                    commandID: call.id
+                )
+            },
             desiredState("setLiked", booleanKey: "is_liked") { comicID, desired, callID in
                 .setLiked(comicID: comicID, isLiked: desired, commandID: callID)
             },
@@ -148,6 +164,19 @@ nonisolated struct AgentToolCatalog: AgentToolCallParsing {
             },
             wordMutation("removeBlockedWord", keys: ["word"], required: ["word"], schema: #"{"type":"object","properties":{"word":{"type":"string","minLength":1,"maxLength":64}},"required":["word"],"additionalProperties":false}"#) { object, call in
                 .removeBlockedWord(word: try word(object, "word"), commandID: call.id)
+            },
+            wordMutation("addIncludedWord", keys: ["word"], required: ["word"], schema: #"{"type":"object","properties":{"word":{"type":"string","minLength":1,"maxLength":64}},"required":["word"],"additionalProperties":false}"#) { object, call in
+                .addIncludedWord(word: try word(object, "word"), commandID: call.id)
+            },
+            wordMutation("updateIncludedWord", keys: ["old_word", "new_word"], required: ["old_word", "new_word"], schema: #"{"type":"object","properties":{"old_word":{"type":"string","minLength":1,"maxLength":64},"new_word":{"type":"string","minLength":1,"maxLength":64}},"required":["old_word","new_word"],"additionalProperties":false}"#) { object, call in
+                .updateIncludedWord(
+                    oldWord: try word(object, "old_word"),
+                    newWord: try word(object, "new_word"),
+                    commandID: call.id
+                )
+            },
+            wordMutation("removeIncludedWord", keys: ["word"], required: ["word"], schema: #"{"type":"object","properties":{"word":{"type":"string","minLength":1,"maxLength":64}},"required":["word"],"additionalProperties":false}"#) { object, call in
+                .removeIncludedWord(word: try word(object, "word"), commandID: call.id)
             }
         ].map { spec in
             guard spec.definition.name != "cancelDownload" else {

@@ -300,15 +300,19 @@ struct AgentConversationView: View {
             Text("\(title) · \(action.rawValue) · \(desired ? "true" : "false")")
         case let .currentPage(host):
             Text(localization.text("agent.confirm.currentPage.provider", host))
-        case let .blockedWordAdd(display, normalized):
+        case let .blockedWordAdd(display, normalized),
+             let .includedWordAdd(display, normalized):
             Text("\(display) (\(normalized))")
-        case let .blockedWordUpdate(oldDisplay, oldNormalized, newDisplay, newNormalized):
+        case let .blockedWordUpdate(oldDisplay, oldNormalized, newDisplay, newNormalized),
+             let .includedWordUpdate(oldDisplay, oldNormalized, newDisplay, newNormalized):
             Text("\(oldDisplay) (\(oldNormalized)) → \(newDisplay) (\(newNormalized))")
-        case let .blockedWordRemove(display, normalized):
+        case let .blockedWordRemove(display, normalized),
+             let .includedWordRemove(display, normalized):
             Text("\(display) (\(normalized))")
+        case let .deleteOfflineComic(_, title):
+            Text(title)
         }
     }
-
     private var composer: some View {
         VStack(spacing: 0) {
             Divider()

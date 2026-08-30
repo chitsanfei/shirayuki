@@ -46,6 +46,7 @@ final class AgentProviderFormatsTests: XCTestCase {
                 autoCompactEnabled: false,
                 autoCompactThresholdKiB: 256,
                 toolCallLimit: 99,
+                riskAuthorizationEnabled: false,
                 privacyConfirmed: true
             ),
             .applied
@@ -57,6 +58,7 @@ final class AgentProviderFormatsTests: XCTestCase {
         XCTAssertFalse(store.autoCompactEnabled)
         XCTAssertEqual(store.autoCompactThresholdKiB, 256)
         XCTAssertEqual(store.toolCallLimit, 20)
+        XCTAssertFalse(store.riskAuthorizationEnabled)
         XCTAssertTrue(store.hasAPIKey)
         store.clearAPIKey()
         XCTAssertFalse(store.hasAPIKey)
@@ -69,6 +71,7 @@ final class AgentProviderFormatsTests: XCTestCase {
         XCTAssertTrue(store.autoCompactEnabled)
         XCTAssertEqual(store.autoCompactThresholdKiB, 128)
         XCTAssertEqual(store.toolCallLimit, 10)
+        XCTAssertTrue(store.riskAuthorizationEnabled)
         XCTAssertEqual(store.baseURLString, LLMSettingsStore.defaultEndpoint.absoluteString)
     }
 
@@ -89,6 +92,13 @@ final class AgentProviderFormatsTests: XCTestCase {
         )
         XCTAssertEqual(
             LLMSettingsStore.requestEndpoint(
+                provider: .openAICompatible,
+                baseURL: try XCTUnwrap(URL(string: "https://provider.example/v1/responses"))
+            ).absoluteString,
+            "https://provider.example/v1/responses"
+        )
+        XCTAssertEqual(
+            LLMSettingsStore.requestEndpoint(
                 provider: .anthropicCompatible,
                 baseURL: try XCTUnwrap(URL(string: "https://api.anthropic.com"))
             ).absoluteString,
@@ -100,6 +110,49 @@ final class AgentProviderFormatsTests: XCTestCase {
                 baseURL: try XCTUnwrap(URL(string: "https://api.anthropic.com/v1/messages"))
             ).absoluteString,
             "https://api.anthropic.com/v1/messages"
+        )
+    }
+
+    func testOpenAIResponsesWireEncodingAndDecoding() throws {
+        let endpoint = try XCTUnwrap(URL(string: "https://provider.example/v1/responses"))
+        let request = AgentTransportRequest(
+            messages: [
+                .system("system"),
+                .assistant(.init(
+                    text: "working",
+                    toolCalls: [.init(id: "call-1", name: "currentContext", arguments: "{}")]
+                )),
+                .tool(callID: "call-1", content: "ok"),
+                .transientImage(
+                    callID: "call-image",
+                    prompt: "page",
+                    jpegData: Data([0xFF, 0xD8, 0xFF, 0xD9])
+                )
+            ],
+            tools: AgentToolCatalog().definitions
+        )
+
+        let encoded = try OpenAIAgentTransport.encodedRequest(
+            model: "gpt-model",
+            request: request,
+            endpoint: endpoint
+        )
+        let text = String(decoding: encoded, as: UTF8.self)
+        XCTAssertTrue(text.contains(#""input""#))
+        XCTAssertTrue(text.contains(#""type":"function_call""#))
+        XCTAssertTrue(text.contains(#""type":"function_call_output""#))
+        XCTAssertTrue(text.contains(#""type":"input_image""#))
+        XCTAssertTrue(text.contains(#""parallel_tool_calls":false"#))
+        XCTAssertFalse(text.contains(#""messages""#))
+        XCTAssertFalse(text.contains(#""temperature""#))
+        XCTAssertFalse(text.contains(#""function":{"#))
+
+        let response = Data(#"{"output":[{"type":"message","content":[{"type":"output_text","text":"done"}]},{"type":"function_call","id":"fc_1","call_id":"call-2","name":"search","arguments":"{\"keyword\":\"comic\"}"}]}"#.utf8)
+        let envelope = try OpenAIAgentTransport.decodeResponse(response, endpoint: endpoint)
+        XCTAssertEqual(envelope.text, "done")
+        XCTAssertEqual(
+            envelope.toolCalls,
+            [.init(id: "call-2", name: "search", arguments: #"{"keyword":"comic"}"#)]
         )
     }
 

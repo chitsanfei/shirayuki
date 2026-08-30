@@ -30,6 +30,11 @@ final class ShirayukiUITests: XCTestCase {
         input.typeText("hello-live")
         app.buttons.matching(identifier: "agentSendButton").firstMatch.tap()
         XCTAssertTrue(app.staticTexts["hello-live"].waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "agentState-transport_networkFailed")
+                .firstMatch.waitForExistence(timeout: 3)
+        )
         attachScreenshot(app, name: "Agent conversation with visible user message")
     }
 
@@ -59,11 +64,14 @@ final class ShirayukiUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons.matching(identifier: "agentExecutionModePicker").firstMatch.exists
         )
-        let toolCallLimit = app.steppers["agentToolCallLimitStepper"]
-        XCTAssertTrue(toolCallLimit.exists)
-        XCTAssertTrue((toolCallLimit.value as? String)?.contains("10") == true)
-        XCTAssertTrue(app.switches["agentAutoCompactToggle"].exists)
+        XCTAssertTrue(app.switches["agentRiskAuthorizationToggle"].exists)
+        XCTAssertEqual(app.switches["agentRiskAuthorizationToggle"].value as? String, "1")
+        attachScreenshot(app, name: "Agent sessions and risk authorization")
         app.swipeUp()
+        let toolCallLimit = app.steppers["agentToolCallLimitStepper"]
+        XCTAssertTrue(toolCallLimit.waitForExistence(timeout: 2))
+        XCTAssertTrue((toolCallLimit.value as? String)?.contains("10") == true)
+        XCTAssertTrue(app.switches["agentAutoCompactToggle"].waitForExistence(timeout: 2))
         XCTAssertTrue(
             app.buttons.matching(identifier: "agentAutoCompactThresholdPicker")
                 .firstMatch.waitForExistence(timeout: 2)
@@ -77,6 +85,13 @@ final class ShirayukiUITests: XCTestCase {
             app.buttons.matching(identifier: "agentSettingsClearButton")
                 .firstMatch.waitForExistence(timeout: 2)
         )
+        let apply = app.buttons.matching(identifier: "agentSettingsApplyButton").firstMatch
+        apply.tap()
+        let resultAlert = app.alerts.firstMatch
+        XCTAssertTrue(resultAlert.waitForExistence(timeout: 2))
+        XCTAssertEqual(resultAlert.buttons.count, 1)
+        attachScreenshot(app, name: "Agent settings applied result")
+        resultAlert.buttons.firstMatch.tap()
         XCTAssertTrue(
             app.buttons.matching(identifier: "agentSettingsResetButton")
                 .firstMatch.waitForExistence(timeout: 2)
@@ -107,7 +122,6 @@ final class ShirayukiUITests: XCTestCase {
         XCTAssertTrue(contentFilter.waitForExistence(timeout: 3))
         contentFilter.tap()
 
-        XCTAssertTrue(app.switches["blockedWordAgentConfirmationToggle"].waitForExistence(timeout: 2))
         app.buttons["addBlockedWordButton"].tap()
         let editor = app.alerts.textFields.firstMatch
         XCTAssertTrue(editor.waitForExistence(timeout: 2))

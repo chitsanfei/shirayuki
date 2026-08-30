@@ -10,6 +10,11 @@ nonisolated struct AgentLLMTransportConfiguration: Equatable, Sendable {
 }
 
 nonisolated actor OpenAIAgentTransport: AgentLLMTransport {
+    private enum WireFormat {
+        case chatCompletions
+        case responses
+    }
+
     private let configuration: AgentLLMTransportConfiguration
 
     init(configuration: AgentLLMTransportConfiguration) {
@@ -24,7 +29,11 @@ nonisolated actor OpenAIAgentTransport: AgentLLMTransport {
             throw OpenAITransportError(code: .configurationRequired)
         }
         try Self.validateImages(request.messages)
-        let bodyData = try Self.encodedRequest(model: configuration.model, request: request)
+        let bodyData = try Self.encodedRequest(
+            model: configuration.model,
+            request: request,
+            endpoint: configuration.endpoint
+        )
 
         var urlRequest = URLRequest(url: configuration.endpoint)
         urlRequest.httpMethod = "POST"
@@ -64,42 +73,39 @@ nonisolated actor OpenAIAgentTransport: AgentLLMTransport {
             throw OpenAITransportError(code: .serverError)
         }
 
-        do {
-            let completion = try JSONDecoder().decode(OpenAIWireCompletion.self, from: data)
-            guard let message = completion.choices.first?.message else {
-                throw OpenAITransportError(code: .invalidResponse)
-            }
-            return AgentAssistantEnvelope(
-                text: message.content,
-                toolCalls: message.toolCalls?.map {
-                    AgentLLMToolCall(id: $0.id, name: $0.function.name, arguments: $0.function.arguments)
-                } ?? []
-            )
-        } catch let error as OpenAITransportError {
-            throw error
-        } catch {
-            throw OpenAITransportError(code: .decodingFailed)
-        }
+        return try Self.decodeResponse(data, endpoint: configuration.endpoint)
     }
 
     nonisolated static func encodedRequest(
         model: String,
         request: AgentTransportRequest
     ) throws -> Data {
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.withoutEscapingSlashes]
-            return try encoder.encode(OpenAIWireRequest(
-                model: model,
-                messages: request.messages.map(OpenAIWireMessage.init),
-                tools: request.tools.isEmpty ? nil : request.tools.map { try OpenAIWireTool($0) },
-                parallelToolCalls: false,
-                temperature: 0.2
-            ))
-        } catch let error as OpenAITransportError {
-            throw error
-        } catch {
-            throw OpenAITransportError(code: .decodingFailed)
+        try encodedRequest(
+            model: model,
+            request: request,
+            format: .chatCompletions
+        )
+    }
+
+    nonisolated static func encodedRequest(
+        model: String,
+        request: AgentTransportRequest,
+        endpoint: URL
+    ) throws -> Data {
+        try encodedRequest(model: model, request: request, format: wireFormat(for: endpoint))
+    }
+
+    nonisolated static func decodeResponse(
+        _ data: Data,
+        endpoint: URL
+    ) throws -> AgentAssistantEnvelope {
+        switch wireFormat(for: endpoint) {
+        case .chatCompletions:
+            if let value = try? decodeChatCompletion(data) { return value }
+            return try decodeResponses(data)
+        case .responses:
+            if let value = try? decodeResponses(data) { return value }
+            return try decodeChatCompletion(data)
         }
     }
 
@@ -124,6 +130,90 @@ nonisolated actor OpenAIAgentTransport: AgentLLMTransport {
         containsImage: Bool
     ) -> Bool {
         containsImage && (statusCode == 400 || statusCode == 422)
+    }
+
+    nonisolated private static func wireFormat(for endpoint: URL) -> WireFormat {
+        endpoint.path
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .lowercased()
+            .hasSuffix("responses") ? .responses : .chatCompletions
+    }
+
+    nonisolated private static func encodedRequest(
+        model: String,
+        request: AgentTransportRequest,
+        format: WireFormat
+    ) throws -> Data {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.withoutEscapingSlashes]
+            switch format {
+            case .chatCompletions:
+                return try encoder.encode(OpenAIWireRequest(
+                    model: model,
+                    messages: request.messages.map(OpenAIWireMessage.init),
+                    tools: request.tools.isEmpty ? nil : request.tools.map { try OpenAIWireTool($0) },
+                    parallelToolCalls: false,
+                    temperature: 0.2
+                ))
+            case .responses:
+                return try encoder.encode(OpenAIResponsesWireRequest(
+                    model: model,
+                    input: request.messages.flatMap(OpenAIResponsesInputItem.items),
+                    tools: request.tools.isEmpty ? nil : request.tools.map { try OpenAIResponsesTool($0) },
+                    parallelToolCalls: false,
+                    store: false
+                ))
+            }
+        } catch let error as OpenAITransportError {
+            throw error
+        } catch {
+            throw OpenAITransportError(code: .decodingFailed)
+        }
+    }
+
+    nonisolated private static func decodeChatCompletion(
+        _ data: Data
+    ) throws -> AgentAssistantEnvelope {
+        guard let message = try JSONDecoder()
+            .decode(OpenAIWireCompletion.self, from: data)
+            .choices.first?.message else {
+            throw OpenAITransportError(code: .invalidResponse)
+        }
+        return AgentAssistantEnvelope(
+            text: message.content,
+            toolCalls: message.toolCalls?.map {
+                AgentLLMToolCall(
+                    id: $0.id,
+                    name: $0.function.name,
+                    arguments: $0.function.arguments
+                )
+            } ?? []
+        )
+    }
+
+    nonisolated private static func decodeResponses(
+        _ data: Data
+    ) throws -> AgentAssistantEnvelope {
+        do {
+            let response = try JSONDecoder().decode(OpenAIResponsesWireResponse.self, from: data)
+            let text = ([response.outputText] + response.output.flatMap(\.textValues))
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n")
+            let calls = response.output.compactMap(\.toolCall)
+            guard !text.isEmpty || !calls.isEmpty else {
+                throw OpenAITransportError(code: .invalidResponse)
+            }
+            return AgentAssistantEnvelope(
+                text: text.isEmpty ? nil : text,
+                toolCalls: calls
+            )
+        } catch let error as OpenAITransportError {
+            throw error
+        } catch {
+            throw OpenAITransportError(code: .decodingFailed)
+        }
     }
 }
 
@@ -316,4 +406,162 @@ nonisolated private struct OpenAIWireResponseMessage: Decodable {
         case content
         case toolCalls = "tool_calls"
     }
+}
+
+nonisolated private struct OpenAIResponsesWireRequest: Encodable {
+    let model: String
+    let input: [OpenAIResponsesInputItem]
+    let tools: [OpenAIResponsesTool]?
+    let parallelToolCalls: Bool
+    let store: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case model, input, tools, store
+        case parallelToolCalls = "parallel_tool_calls"
+    }
+}
+
+nonisolated private enum OpenAIResponsesInputItem: Encodable {
+    case message(role: String, content: OpenAIResponsesContent)
+    case functionCall(id: String, name: String, arguments: String)
+    case functionOutput(id: String, output: String)
+
+    enum CodingKeys: String, CodingKey {
+        case type, role, content, name, arguments, output
+        case callID = "call_id"
+    }
+
+    static func items(_ message: AgentTransportMessage) -> [Self] {
+        switch message {
+        case let .system(text):
+            [.message(role: "system", content: .text(text))]
+        case let .user(text):
+            [.message(role: "user", content: .text(text))]
+        case let .assistant(envelope):
+            (envelope.text.map {
+                [.message(role: "assistant", content: .text($0))]
+            } ?? []) + envelope.toolCalls.map {
+                .functionCall(id: $0.id, name: $0.name, arguments: $0.arguments)
+            }
+        case let .tool(callID, text):
+            [.functionOutput(id: callID, output: text)]
+        case let .transientImage(callID, prompt, jpegData):
+            [.message(role: "user", content: .parts([
+                .text("Tool call \(callID): \(prompt)"),
+                .image("data:image/jpeg;base64,\(jpegData.base64EncodedString())")
+            ]))]
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case let .message(role, content):
+            try container.encode("message", forKey: .type)
+            try container.encode(role, forKey: .role)
+            try container.encode(content, forKey: .content)
+        case let .functionCall(id, name, arguments):
+            try container.encode("function_call", forKey: .type)
+            try container.encode(id, forKey: .callID)
+            try container.encode(name, forKey: .name)
+            try container.encode(arguments, forKey: .arguments)
+        case let .functionOutput(id, output):
+            try container.encode("function_call_output", forKey: .type)
+            try container.encode(id, forKey: .callID)
+            try container.encode(output, forKey: .output)
+        }
+    }
+}
+
+nonisolated private enum OpenAIResponsesContent: Encodable {
+    case text(String)
+    case parts([OpenAIResponsesContentPart])
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case let .text(text): try container.encode(text)
+        case let .parts(parts): try container.encode(parts)
+        }
+    }
+}
+
+nonisolated private enum OpenAIResponsesContentPart: Encodable {
+    case text(String)
+    case image(String)
+
+    enum CodingKeys: String, CodingKey {
+        case type, text
+        case imageURL = "image_url"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case let .text(text):
+            try container.encode("input_text", forKey: .type)
+            try container.encode(text, forKey: .text)
+        case let .image(url):
+            try container.encode("input_image", forKey: .type)
+            try container.encode(url, forKey: .imageURL)
+        }
+    }
+}
+
+nonisolated private struct OpenAIResponsesTool: Encodable {
+    let type = "function"
+    let name: String
+    let description: String
+    let parameters: OpenAIWireJSONValue
+
+    init(_ definition: AgentToolDefinition) throws {
+        guard let data = definition.parametersJSON.data(using: .utf8) else {
+            throw OpenAITransportError(code: .decodingFailed)
+        }
+        name = definition.name
+        description = definition.description
+        parameters = try JSONDecoder().decode(OpenAIWireJSONValue.self, from: data)
+    }
+}
+
+nonisolated private struct OpenAIResponsesWireResponse: Decodable {
+    let outputText: String?
+    let output: [OpenAIResponsesOutputItem]
+
+    enum CodingKeys: String, CodingKey {
+        case output
+        case outputText = "output_text"
+    }
+}
+
+nonisolated private struct OpenAIResponsesOutputItem: Decodable {
+    let id: String?
+    let type: String
+    let callID: String?
+    let name: String?
+    let arguments: String?
+    let content: [OpenAIResponsesOutputContent]?
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, name, arguments, content
+        case callID = "call_id"
+    }
+
+    var textValues: [String?] {
+        guard type == "message" else { return [] }
+        return content?.map(\.text) ?? []
+    }
+
+    var toolCall: AgentLLMToolCall? {
+        guard type == "function_call",
+              let id = callID ?? id,
+              let name,
+              let arguments else { return nil }
+        return AgentLLMToolCall(id: id, name: name, arguments: arguments)
+    }
+}
+
+nonisolated private struct OpenAIResponsesOutputContent: Decodable {
+    let type: String
+    let text: String?
 }

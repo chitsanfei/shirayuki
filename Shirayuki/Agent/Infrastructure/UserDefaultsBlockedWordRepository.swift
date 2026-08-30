@@ -4,10 +4,8 @@ import Foundation
 @MainActor
 final class UserDefaultsBlockedWordRepository: ObservableObject, BlockedWordRepository {
     static let wordsKey = "blocked_words"
-    static let confirmationKey = "agent_blocked_word_confirmation_required"
 
     @Published private(set) var currentSnapshot: BlockedWordSnapshot
-    @Published private(set) var confirmationRequired: Bool
 
     private let defaults: UserDefaults
     private let encoder = JSONEncoder()
@@ -52,9 +50,6 @@ final class UserDefaultsBlockedWordRepository: ObservableObject, BlockedWordRepo
         } else {
             currentSnapshot = .empty
         }
-        confirmationRequired = defaults.object(forKey: Self.confirmationKey) == nil
-            ? true
-            : defaults.bool(forKey: Self.confirmationKey)
     }
 
     func snapshot() async -> BlockedWordSnapshot { currentSnapshot }
@@ -117,6 +112,29 @@ final class UserDefaultsBlockedWordRepository: ObservableObject, BlockedWordRepo
         )
     }
 
+    func updateIncluded(
+        normalizedOld: String,
+        newDisplay: String
+    ) throws -> BlockedWordWriteResult {
+        guard let index = currentSnapshot.includeRules.firstIndex(where: {
+            $0.normalizedKey == normalizedOld
+        }) else {
+            throw BlockedWordValidationError.notFound
+        }
+        let replacement = try BlockedWordCanonicalizer.rule(from: newDisplay)
+        if currentSnapshot.includeRules.enumerated().contains(where: {
+            $0.offset != index && $0.element.normalizedKey == replacement.normalizedKey
+        }) {
+            throw BlockedWordValidationError.duplicateTarget
+        }
+        guard currentSnapshot.includeRules[index] != replacement else {
+            return .unchanged(reason: .duplicate, snapshot: currentSnapshot)
+        }
+        var includeRules = currentSnapshot.includeRules
+        includeRules[index] = replacement
+        return try commit(rules: currentSnapshot.rules, includeRules: includeRules)
+    }
+
     func removeIncluded(normalizedKey: String) throws -> BlockedWordWriteResult {
         guard let index = currentSnapshot.includeRules.firstIndex(where: { $0.normalizedKey == normalizedKey }) else {
             throw BlockedWordValidationError.notFound
@@ -147,10 +165,6 @@ final class UserDefaultsBlockedWordRepository: ObservableObject, BlockedWordRepo
         return try commit(rules: [], includeRules: [])
     }
 
-    func setConfirmationRequired(_ required: Bool) {
-        confirmationRequired = required
-        defaults.set(required, forKey: Self.confirmationKey)
-    }
 
     private func commit(
         rules: [BlockedWordRule],

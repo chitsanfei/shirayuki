@@ -81,6 +81,7 @@ final class AgentCommandLoopExecutor: AgentLoopCommandExecutor {
         case .pageImageRateLimited: "page_image_rate_limited"
         case .downloadConflict: "download_conflict"
         case .providerFailure: "provider_failure"
+        case .riskAuthorizationRequired: "risk_authorization_required"
         case let .blockedWord(error): error.rawValue
         }
     }

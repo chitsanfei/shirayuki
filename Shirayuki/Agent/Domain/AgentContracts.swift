@@ -276,6 +276,11 @@ nonisolated enum AgentCommand: Equatable, Sendable {
     case addBlockedWord(word: String, commandID: String)
     case updateBlockedWord(oldWord: String, newWord: String, commandID: String)
     case removeBlockedWord(word: String, commandID: String)
+    case listIncludedWords
+    case addIncludedWord(word: String, commandID: String)
+    case updateIncludedWord(oldWord: String, newWord: String, commandID: String)
+    case removeIncludedWord(word: String, commandID: String)
+    case deleteOfflineComic(comicID: String, commandID: String)
 
     var name: String {
         switch self {
@@ -298,6 +303,11 @@ nonisolated enum AgentCommand: Equatable, Sendable {
         case .addBlockedWord: return "addBlockedWord"
         case .updateBlockedWord: return "updateBlockedWord"
         case .removeBlockedWord: return "removeBlockedWord"
+        case .listIncludedWords: return "listIncludedWords"
+        case .addIncludedWord: return "addIncludedWord"
+        case .updateIncludedWord: return "updateIncludedWord"
+        case .removeIncludedWord: return "removeIncludedWord"
+        case .deleteOfflineComic: return "deleteOfflineComic"
         }
     }
 }
@@ -315,6 +325,7 @@ nonisolated enum AgentCommandError: Error, Equatable, Sendable {
     case downloadConflict(existingJobIDs: [String])
     case providerFailure
     case blockedWord(BlockedWordValidationError)
+    case riskAuthorizationRequired
 }
 
 nonisolated enum AgentDesiredState: String, Equatable, Sendable {
@@ -352,6 +363,15 @@ nonisolated enum AgentConfirmationPreview: Equatable, Sendable {
         newNormalizedKey: String
     )
     case blockedWordRemove(displayValue: String, normalizedKey: String)
+    case includedWordAdd(displayValue: String, normalizedKey: String)
+    case includedWordUpdate(
+        oldDisplayValue: String,
+        oldNormalizedKey: String,
+        newDisplayValue: String,
+        newNormalizedKey: String
+    )
+    case includedWordRemove(displayValue: String, normalizedKey: String)
+    case deleteOfflineComic(comicID: String, comicTitle: String)
 }
 nonisolated enum AgentCommandResult: Equatable, Sendable {
     case context(AgentBaseSnapshot)
@@ -368,6 +388,7 @@ nonisolated enum AgentCommandResult: Equatable, Sendable {
     case cancelledDownload(jobID: String)
     case desiredStateApplied(comicID: String, isLiked: Bool?, isFavorited: Bool?)
     case blockedWords(snapshot: BlockedWordSnapshot, operation: String?)
+    case deletedOfflineComic(comicID: String)
     case requiresConfirmation(AgentConfirmationPreview)
     case loginRequired
     case capabilityRequired
@@ -405,9 +426,12 @@ nonisolated enum AgentRedactor {
             return AgentPromptProjection(commandName: command.name, allowedFields: ["comicID", "chapterIDs", "quality", "allowDownload"], excludedFields: excluded + ["user", "favorites", "fullLibrary", "unrelatedDownloads"])
         case .cancelDownload:
             return AgentPromptProjection(commandName: command.name, allowedFields: ["jobID", "state"], excludedFields: excluded + ["user", "favorites", "fullLibrary"])
+        case .deleteOfflineComic:
+            return AgentPromptProjection(commandName: command.name, allowedFields: ["comicID", "title", "deleted"], excludedFields: excluded + ["user", "favorites", "downloads", "imageData"])
         case .setLiked, .setFavorited:
             return AgentPromptProjection(commandName: command.name, allowedFields: ["comicID", "desiredState", "knownCurrentState"], excludedFields: excluded + ["user", "favorites", "offlineLibrary", "downloads", "imageData"])
-        case .listBlockedWords, .addBlockedWord, .updateBlockedWord, .removeBlockedWord:
+        case .listBlockedWords, .addBlockedWord, .updateBlockedWord, .removeBlockedWord,
+             .listIncludedWords, .addIncludedWord, .updateIncludedWord, .removeIncludedWord:
             return AgentPromptProjection(
                 commandName: command.name,
                 allowedFields: ["revision", "normalizedKey", "displayValue", "operation"],
@@ -463,11 +487,21 @@ nonisolated enum AgentResultProjector {
             return "comicID=\(comicID); isLiked=\(isLiked.map(String.init) ?? "none")"
         case (.setFavorited, let .desiredStateApplied(comicID, _, isFavorited)):
             return "comicID=\(comicID); isFavorited=\(isFavorited.map(String.init) ?? "none")"
+        case (.deleteOfflineComic, let .deletedOfflineComic(comicID)):
+            return "comicID=\(comicID); deleted=true"
         case (.listBlockedWords, let .blockedWords(snapshot, operation)),
              (.addBlockedWord, let .blockedWords(snapshot, operation)),
              (.updateBlockedWord, let .blockedWords(snapshot, operation)),
              (.removeBlockedWord, let .blockedWords(snapshot, operation)):
             let rules = snapshot.rules.prefix(100).map {
+                "normalizedKey=\($0.normalizedKey); displayValue=\($0.displayValue)"
+            }.joined(separator: "\n")
+            return "operation=\(operation ?? "list"); revision=\(snapshot.revision)\n\(rules)"
+        case (.listIncludedWords, let .blockedWords(snapshot, operation)),
+             (.addIncludedWord, let .blockedWords(snapshot, operation)),
+             (.updateIncludedWord, let .blockedWords(snapshot, operation)),
+             (.removeIncludedWord, let .blockedWords(snapshot, operation)):
+            let rules = snapshot.includeRules.prefix(100).map {
                 "normalizedKey=\($0.normalizedKey); displayValue=\($0.displayValue)"
             }.joined(separator: "\n")
             return "operation=\(operation ?? "list"); revision=\(snapshot.revision)\n\(rules)"

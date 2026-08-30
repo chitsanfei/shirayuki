@@ -26,9 +26,6 @@ final class AgentRepositoryV005Tests: XCTestCase {
         let restored = UserDefaultsBlockedWordRepository(defaults: defaults)
         let restoredSnapshot = await restored.snapshot()
         XCTAssertEqual(restoredSnapshot, updated.snapshot)
-        XCTAssertTrue(restored.confirmationRequired)
-        restored.setConfirmationRequired(false)
-        XCTAssertFalse(UserDefaultsBlockedWordRepository(defaults: defaults).confirmationRequired)
     }
 
     @MainActor
@@ -131,9 +128,11 @@ final class AgentRepositoryV005Tests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let repository = UserDefaultsBlockedWordRepository(defaults: defaults)
+        var riskAuthorizationEnabled = true
         let service = AgentCommandService(
             blockedWords: repository,
-            sessionIsLoggedIn: { true }
+            sessionIsLoggedIn: { true },
+            riskAuthorizationEnabled: { riskAuthorizationEnabled }
         )
         let sessionID = UUID()
         let command = AgentCommand.addBlockedWord(word: "Café", commandID: "call-1")
@@ -155,15 +154,39 @@ final class AgentRepositoryV005Tests: XCTestCase {
         let replaySnapshot = await repository.snapshot()
         XCTAssertEqual(replaySnapshot.revision, 1)
 
-        repository.setConfirmationRequired(false)
-        let immediate = await service.execute(
+        riskAuthorizationEnabled = false
+        let denied = await service.execute(
             .addBlockedWord(word: "second", commandID: "call-2"),
             sessionID: sessionID
         )
-        guard case let .blockedWords(immediateSnapshot, _) = immediate else {
-            return XCTFail("Expected immediate mutation")
+        XCTAssertEqual(denied, .failure(.riskAuthorizationRequired))
+        let deniedFavorite = await service.execute(
+            .setFavorited(comicID: "comic", isFavorited: false, commandID: "call-favorite"),
+            sessionID: sessionID
+        )
+        XCTAssertEqual(deniedFavorite, .failure(.riskAuthorizationRequired))
+        let deniedDelete = await service.execute(
+            .deleteOfflineComic(comicID: "comic", commandID: "call-delete"),
+            sessionID: sessionID
+        )
+        XCTAssertEqual(deniedDelete, .failure(.riskAuthorizationRequired))
+
+        riskAuthorizationEnabled = true
+        let included = AgentCommand.addIncludedWord(word: "Drama", commandID: "call-3")
+        guard case .requiresConfirmation(.includedWordAdd) = await service.execute(
+            included,
+            sessionID: sessionID
+        ) else {
+            return XCTFail("Expected included-word confirmation")
         }
-        XCTAssertEqual(immediateSnapshot.revision, 2)
+        guard case let .blockedWords(includedSnapshot, _) = await service.execute(
+            included,
+            sessionID: sessionID,
+            confirmed: true
+        ) else {
+            return XCTFail("Expected included-word result")
+        }
+        XCTAssertEqual(includedSnapshot.includeRules.map(\.displayValue), ["Drama"])
     }
 }
 

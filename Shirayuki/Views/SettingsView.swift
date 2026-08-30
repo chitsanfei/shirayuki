@@ -904,32 +904,45 @@ struct AboutSettingsView: View {
     }
 }
 
+private enum AgentSettingsDestructiveAction: String, Identifiable {
+    case clearToken
+    case reset
+    case deleteSessions
+
+    var id: String { rawValue }
+}
+
+private struct AgentSettingsNotice: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
 /// Configures Agent provider wire format, model, endpoint, and API key.
 struct AgentSettingsView: View {
     @ObservedObject private var store = LLMSettingsStore.shared
     @ObservedObject private var localization = AppLocalization.shared
     @EnvironmentObject private var runtime: AgentRuntime
-    @EnvironmentObject private var blockedWords: UserDefaultsBlockedWordRepository
     @State private var executionMode = AgentExecutionMode.ask
     @State private var provider = LLMProvider.openAICompatible
     @State private var autoCompactEnabled = LLMSettingsStore.defaultAutoCompactEnabled
     @State private var autoCompactThresholdKiB = LLMSettingsStore.defaultAutoCompactThresholdKiB
     @State private var toolCallLimit = LLMSettingsStore.defaultToolCallLimit
+    @State private var riskAuthorizationEnabled = LLMSettingsStore.defaultRiskAuthorizationEnabled
     @State private var model = ""
     @State private var baseURL = ""
     @State private var apiKey = ""
-    @State private var message: String?
     @State private var pendingCustomEndpoint = false
     @State private var pendingCustomHost = ""
+    @State private var pendingDestructiveAction: AgentSettingsDestructiveAction?
+    @State private var notice: AgentSettingsNotice?
+    @State private var deletingSessions = false
     @State private var apiKeyRepresentsStoredValue = false
     @FocusState private var apiKeyFocused: Bool
 
     var body: some View {
         Form {
             Section(localization.text("settings.agent.history")) {
-                Text(localization.text("settings.agent.history.privacy"))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
                 LabeledContent(
                     localization.text("settings.agent.history.count"),
                     value: "\(runtime.history.count)"
@@ -950,6 +963,22 @@ struct AgentSettingsView: View {
                 NavigationLink(localization.text("settings.agent.history.manage")) {
                     AgentSessionHistoryView()
                 }
+                Button(role: .destructive) {
+                    pendingDestructiveAction = .deleteSessions
+                } label: {
+                    HStack {
+                        Label(
+                            localization.text("settings.storage.agent.deleteAll"),
+                            systemImage: "trash"
+                        )
+                        .foregroundStyle(.red)
+                        Spacer()
+                        if deletingSessions { ProgressView() }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .disabled(deletingSessions)
+                .accessibilityIdentifier("agentSettingsDeleteAllSessionsButton")
             }
 
             Section(localization.text("settings.agent.provider")) {
@@ -979,18 +1008,13 @@ struct AgentSettingsView: View {
                 }
 
                 Toggle(
-                    localization.text("settings.contentFilter.agentConfirmation"),
-                    isOn: Binding(
-                        get: { blockedWords.confirmationRequired },
-                        set: { blockedWords.setConfirmationRequired($0) }
-                    )
+                    localization.text("settings.agent.riskAuthorization"),
+                    isOn: $riskAuthorizationEnabled
                 )
-                .accessibilityIdentifier("blockedWordAgentConfirmationToggle")
-                if !blockedWords.confirmationRequired {
-                    Text(localization.text("settings.contentFilter.agentConfirmationRisk"))
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                }
+                .accessibilityIdentifier("agentRiskAuthorizationToggle")
+                Text(localization.text("settings.agent.riskAuthorization.footer"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
 
                 TextField(localization.text("settings.agent.model"), text: $model)
                     #if os(iOS)
@@ -1020,11 +1044,6 @@ struct AgentSettingsView: View {
                         }
                     }
 
-                if let message {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
             }
 
             Section(localization.text("settings.agent.compaction")) {
@@ -1078,26 +1097,29 @@ struct AgentSettingsView: View {
                 .accessibilityIdentifier("agentSettingsApplyButton")
 
                 Button(role: .destructive) {
-                    store.clearAPIKey()
-                    apiKey = ""
-                    apiKeyRepresentsStoredValue = false
-                    message = localization.text("settings.agent.cleared")
+                    pendingDestructiveAction = .clearToken
                 } label: {
                     HStack {
-                        Label(localization.text("common.clear"), systemImage: "key.slash")
+                        Label(
+                            localization.text("settings.agent.clearToken"),
+                            systemImage: "key.slash.fill"
+                        )
+                        .foregroundStyle(.red)
                         Spacer()
                     }
                     .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("agentSettingsClearButton")
 
-                Button {
-                    store.resetToDefaults()
-                    loadPersistedValues()
-                    message = localization.text("settings.agent.resetDone")
+                Button(role: .destructive) {
+                    pendingDestructiveAction = .reset
                 } label: {
                     HStack {
-                        Label(localization.text("settings.agent.reset"), systemImage: "arrow.counterclockwise")
+                        Label(
+                            localization.text("settings.agent.reset"),
+                            systemImage: "arrow.counterclockwise.circle.fill"
+                        )
+                        .foregroundStyle(.red)
                         Spacer()
                     }
                     .contentShape(Rectangle())
@@ -1137,6 +1159,16 @@ struct AgentSettingsView: View {
                 + localization.text("settings.agent.customHost", pendingCustomHost)
             )
         }
+        .alert(item: $pendingDestructiveAction) { action in
+            destructiveAlert(for: action)
+        }
+        .alert(item: $notice) { notice in
+            Alert(
+                title: Text(notice.title),
+                message: Text(notice.message),
+                dismissButton: .default(Text(localization.text("common.confirm")))
+            )
+        }
     }
 
     private func applySettings(privacyConfirmed: Bool = false) {
@@ -1149,13 +1181,20 @@ struct AgentSettingsView: View {
             autoCompactEnabled: autoCompactEnabled,
             autoCompactThresholdKiB: autoCompactThresholdKiB,
             toolCallLimit: toolCallLimit,
+            riskAuthorizationEnabled: riskAuthorizationEnabled,
             privacyConfirmed: privacyConfirmed
         ) {
         case .applied:
             loadPersistedValues()
-            message = localization.text("settings.agent.applied")
+            notice = AgentSettingsNotice(
+                title: localization.text("common.apply"),
+                message: localization.text("settings.agent.applied")
+            )
         case .invalid:
-            message = localization.text("agent.state.configurationRequired")
+            notice = AgentSettingsNotice(
+                title: localization.text("settings.agent.action.error"),
+                message: localization.text("agent.state.configurationRequired")
+            )
         case let .privacyConfirmationRequired(host):
             pendingCustomHost = host
             pendingCustomEndpoint = true
@@ -1168,6 +1207,7 @@ struct AgentSettingsView: View {
         autoCompactEnabled = store.autoCompactEnabled
         autoCompactThresholdKiB = store.autoCompactThresholdKiB
         toolCallLimit = store.toolCallLimit
+        riskAuthorizationEnabled = store.riskAuthorizationEnabled
         model = store.model
         baseURL = store.baseURLString
         if store.hasAPIKey {
@@ -1175,6 +1215,73 @@ struct AgentSettingsView: View {
         } else {
             apiKey = ""
             apiKeyRepresentsStoredValue = false
+        }
+    }
+
+    private func destructiveAlert(
+        for action: AgentSettingsDestructiveAction
+    ) -> Alert {
+        let titleKey: String
+        let messageKey: String
+        switch action {
+        case .clearToken:
+            titleKey = "settings.agent.clearToken"
+            messageKey = "settings.agent.clearToken.confirm"
+        case .reset:
+            titleKey = "settings.agent.reset"
+            messageKey = "settings.agent.reset.confirm"
+        case .deleteSessions:
+            titleKey = "settings.storage.agent.deleteAll"
+            messageKey = "settings.storage.agent.deleteAll.confirm"
+        }
+        return Alert(
+            title: Text(localization.text(titleKey)),
+            message: Text(localization.text(messageKey)),
+            primaryButton: .destructive(Text(localization.text("common.confirm"))) {
+                perform(action)
+            },
+            secondaryButton: .cancel()
+        )
+    }
+
+    private func perform(_ action: AgentSettingsDestructiveAction) {
+        switch action {
+        case .clearToken:
+            let succeeded = store.clearAPIKey()
+            apiKey = ""
+            apiKeyRepresentsStoredValue = false
+            notice = AgentSettingsNotice(
+                title: localization.text(
+                    succeeded ? "settings.agent.clearToken" : "settings.agent.action.error"
+                ),
+                message: localization.text(
+                    succeeded ? "settings.agent.cleared" : "settings.agent.clearToken.error"
+                )
+            )
+        case .reset:
+            store.resetToDefaults()
+            loadPersistedValues()
+            notice = AgentSettingsNotice(
+                title: localization.text("settings.agent.reset"),
+                message: localization.text("settings.agent.resetDone")
+            )
+        case .deleteSessions:
+            deletingSessions = true
+            Task {
+                do {
+                    try await runtime.deleteAll()
+                    notice = AgentSettingsNotice(
+                        title: localization.text("settings.storage.agent.deleteAll"),
+                        message: localization.text("settings.storage.agent.deleteAll.done")
+                    )
+                } catch {
+                    notice = AgentSettingsNotice(
+                        title: localization.text("settings.agent.action.error"),
+                        message: localization.text("settings.storage.agent.deleteAll.error")
+                    )
+                }
+                deletingSessions = false
+            }
         }
     }
 
@@ -1191,11 +1298,6 @@ struct AgentSessionHistoryView: View {
 
     var body: some View {
         List {
-            Section {
-                Text(localization.text("settings.agent.history.privacy"))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
 
             Section {
                 Button {

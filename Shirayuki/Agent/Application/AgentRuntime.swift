@@ -168,6 +168,9 @@ final class AgentRuntime: ObservableObject {
                 guard !Task.isCancelled else { return }
                 apply(outcome, expectedSessionID: expectedSessionID)
             } catch is CancellationError {
+            } catch let error as OpenAITransportError {
+                stateCode = "transport_\(error.code.rawValue)"
+                await closeFailedTurn(sessionID: expectedSessionID)
             } catch let error as AgentSessionRepositoryError where error == .sessionLimitReached {
                 stateCode = "session_limit_reached"
                 await closeFailedTurn(sessionID: expectedSessionID)
