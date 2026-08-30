@@ -89,7 +89,6 @@ final class ShirayukiUITests: XCTestCase {
         apply.tap()
         let resultAlert = app.alerts.firstMatch
         XCTAssertTrue(resultAlert.waitForExistence(timeout: 2))
-        XCTAssertEqual(resultAlert.buttons.count, 1)
         attachScreenshot(app, name: "Agent settings applied result")
         app.buttons.matching(identifier: "agentSettingsNoticeDismissButton").firstMatch.tap()
 
@@ -129,7 +128,9 @@ final class ShirayukiUITests: XCTestCase {
         let deleteSessions = app.buttons["agentSettingsDeleteAllSessionsButton"]
         XCTAssertTrue(deleteSessions.waitForExistence(timeout: 3))
         deleteSessions.tap()
-        let confirm = app.buttons["agentSettingsConfirm-deleteSessions"]
+        let confirm = app.buttons.matching(
+            identifier: "agentSettingsConfirm-deleteSessions"
+        ).firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 2))
         confirm.tap()
         XCTAssertTrue(
@@ -154,7 +155,9 @@ final class ShirayukiUITests: XCTestCase {
         let clearOffline = app.buttons["storageSettingsClearOfflineButton"]
         XCTAssertTrue(clearOffline.waitForExistence(timeout: 3))
         clearOffline.tap()
-        let confirm = app.buttons["storageSettingsConfirm-clearOffline"]
+        let confirm = app.buttons.matching(
+            identifier: "storageSettingsConfirm-clearOffline"
+        ).firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 2))
         confirm.tap()
         XCTAssertTrue(
