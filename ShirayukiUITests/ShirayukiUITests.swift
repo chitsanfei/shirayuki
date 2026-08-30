@@ -127,8 +127,12 @@ final class ShirayukiUITests: XCTestCase {
         XCTAssertTrue(editor.waitForExistence(timeout: 2))
         editor.typeText("v005-ui-filter")
         app.buttons.matching(identifier: "saveBlockedWordButton").firstMatch.tap()
+        let blockedWords = app.buttons["viewBlockedWordsButton"]
+        XCTAssertTrue(blockedWords.waitForExistence(timeout: 2))
+        blockedWords.tap()
         XCTAssertTrue(app.staticTexts["v005-ui-filter"].waitForExistence(timeout: 2))
 
+        app.navigationBars.buttons.element(boundBy: 0).tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         let appearance = app.buttons["appearanceSettingsLink"]
         XCTAssertTrue(appearance.waitForExistence(timeout: 2))
