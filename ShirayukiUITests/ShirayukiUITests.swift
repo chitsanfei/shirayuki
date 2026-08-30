@@ -91,12 +91,75 @@ final class ShirayukiUITests: XCTestCase {
         XCTAssertTrue(resultAlert.waitForExistence(timeout: 2))
         XCTAssertEqual(resultAlert.buttons.count, 1)
         attachScreenshot(app, name: "Agent settings applied result")
-        resultAlert.buttons.firstMatch.tap()
+        app.buttons.matching(identifier: "agentSettingsNoticeDismissButton").firstMatch.tap()
+
+        let clearToken = app.buttons.matching(identifier: "agentSettingsClearButton").firstMatch
+        XCTAssertTrue(clearToken.waitForExistence(timeout: 2))
+        clearToken.tap()
+        let confirmClear = app.buttons.matching(identifier: "agentSettingsConfirm-clearToken").firstMatch
+        XCTAssertTrue(confirmClear.waitForExistence(timeout: 2))
+        confirmClear.tap()
+        let clearedNotice = app.buttons.matching(
+            identifier: "agentSettingsNoticeDismissButton"
+        ).firstMatch
+        XCTAssertTrue(clearedNotice.waitForExistence(timeout: 2))
+        clearedNotice.tap()
+
+        let reset = app.buttons.matching(identifier: "agentSettingsResetButton").firstMatch
+        XCTAssertTrue(reset.waitForExistence(timeout: 2))
+        reset.tap()
+        let confirmReset = app.buttons.matching(identifier: "agentSettingsConfirm-reset").firstMatch
+        XCTAssertTrue(confirmReset.waitForExistence(timeout: 2))
+        confirmReset.tap()
         XCTAssertTrue(
-            app.buttons.matching(identifier: "agentSettingsResetButton")
+            app.buttons.matching(identifier: "agentSettingsNoticeDismissButton")
                 .firstMatch.waitForExistence(timeout: 2)
         )
         attachScreenshot(app, name: "Unified Agent provider settings")
+    }
+
+    @MainActor
+    func testAgentSessionDeletionRequiresConfirmationAndShowsNotice() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        app.buttons["settingsButton"].tap()
+        app.buttons["agentSettingsLink"].tap()
+
+        let deleteSessions = app.buttons["agentSettingsDeleteAllSessionsButton"]
+        XCTAssertTrue(deleteSessions.waitForExistence(timeout: 3))
+        deleteSessions.tap()
+        let confirm = app.buttons["agentSettingsConfirm-deleteSessions"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 2))
+        confirm.tap()
+        XCTAssertTrue(
+            app.buttons["agentSettingsNoticeDismissButton"].waitForExistence(timeout: 2)
+        )
+    }
+
+    @MainActor
+    func testOfflineCleanupRequiresConfirmationAndShowsNotice() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        app.buttons["settingsButton"].tap()
+        let storage = app.buttons["storageSettingsLink"]
+        for _ in 0..<5 where !storage.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(storage.waitForExistence(timeout: 3))
+        XCTAssertTrue(storage.isHittable)
+        storage.tap()
+
+        let clearOffline = app.buttons["storageSettingsClearOfflineButton"]
+        XCTAssertTrue(clearOffline.waitForExistence(timeout: 3))
+        clearOffline.tap()
+        let confirm = app.buttons["storageSettingsConfirm-clearOffline"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 2))
+        confirm.tap()
+        XCTAssertTrue(
+            app.buttons["storageSettingsNoticeDismissButton"].waitForExistence(timeout: 2)
+        )
     }
 
     @MainActor

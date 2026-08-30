@@ -50,11 +50,9 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
-    func clearOfflineStorage() {
-        Task {
-            try? await OfflineComicStore.shared.deleteAll()
-            refreshStorageUsage()
-        }
+    func clearOfflineStorage() async throws {
+        try await OfflineComicStore.shared.deleteAll()
+        offlineStorageSize = 0
     }
     
     func selectProxyRule(_ rule: AppProxyRule) {

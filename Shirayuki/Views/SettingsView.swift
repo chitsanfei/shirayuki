@@ -679,14 +679,37 @@ private struct ProxyEditorSheet: View {
     }
 }
 
+private struct SettingsNotice: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
+private enum StorageSettingsDestructiveAction: String {
+    case clearOffline
+    case deleteSessions
+}
+
+private enum StorageSettingsAlert: Identifiable {
+    case destructive(StorageSettingsDestructiveAction)
+    case notice(SettingsNotice)
+
+    var id: String {
+        switch self {
+        case let .destructive(action): "destructive-\(action.rawValue)"
+        case let .notice(notice): "notice-\(notice.id.uuidString)"
+        }
+    }
+}
+
 /// Reports and clears image-cache and offline storage.
 struct StorageSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject private var localization = AppLocalization.shared
     @EnvironmentObject private var runtime: AgentRuntime
-    @State private var confirmDeleteSessions = false
+    @State private var activeAlert: StorageSettingsAlert?
+    @State private var deletingOfflineStorage = false
     @State private var deletingSessions = false
-    @State private var sessionMessage: String?
 
     var body: some View {
         Form {
@@ -717,12 +740,20 @@ struct StorageSettingsView: View {
                     OfflineComicsView()
                 }
 
-                Button(localization.text("settings.storage.offline.clear"), role: .destructive) {
-                    viewModel.clearOfflineStorage()
+                Button(role: .destructive) {
+                    activeAlert = .destructive(.clearOffline)
+                } label: {
+                    HStack {
+                        Text(localization.text("settings.storage.offline.clear"))
+                        Spacer()
+                        if deletingOfflineStorage { ProgressView() }
+                    }
                 }
+                .disabled(deletingOfflineStorage)
+                .accessibilityIdentifier("storageSettingsClearOfflineButton")
 
                 Button(role: .destructive) {
-                    confirmDeleteSessions = true
+                    activeAlert = .destructive(.deleteSessions)
                 } label: {
                     HStack {
                         Text(localization.text("settings.storage.agent.deleteAll"))
@@ -731,8 +762,9 @@ struct StorageSettingsView: View {
                     }
                 }
                 .disabled(runtime.sessionStorageBytes == 0 || deletingSessions)
+                .accessibilityIdentifier("storageSettingsDeleteAllSessionsButton")
 
-                if let message = sessionMessage ?? viewModel.cacheMessage {
+                if let message = viewModel.cacheMessage {
                     Text(message)
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
@@ -748,29 +780,99 @@ struct StorageSettingsView: View {
             await runtime.refreshHistory()
         }
         .alert(
-            localization.text("settings.storage.agent.deleteAll"),
-            isPresented: $confirmDeleteSessions
-        ) {
-            Button(localization.text("common.cancel"), role: .cancel) {}
-            Button(localization.text("common.delete"), role: .destructive) {
-                deleteAllSessions()
+            activeAlert.map(alertTitle) ?? "",
+            isPresented: alertIsPresented,
+            presenting: activeAlert
+        ) { alert in
+            switch alert {
+            case let .destructive(action):
+                Button(localization.text("common.cancel"), role: .cancel) {}
+                    .accessibilityIdentifier("storageSettingsAlertCancelButton")
+                Button(localization.text("common.delete"), role: .destructive) {
+                    perform(action)
+                }
+                .accessibilityIdentifier("storageSettingsConfirm-\(action.rawValue)")
+            case .notice:
+                Button(localization.text("common.confirm")) {}
+                    .accessibilityIdentifier("storageSettingsNoticeDismissButton")
             }
         } message: {
-            Text(localization.text("settings.storage.agent.deleteAll.confirm"))
+            Text(alertMessage($0))
         }
     }
 
-    private func deleteAllSessions() {
-        deletingSessions = true
-        sessionMessage = nil
-        Task {
-            do {
-                try await runtime.deleteAll()
-                sessionMessage = localization.text("settings.storage.agent.deleteAll.done")
-            } catch {
-                sessionMessage = localization.text("settings.storage.agent.deleteAll.error")
+    private var alertIsPresented: Binding<Bool> {
+        Binding(
+            get: { activeAlert != nil },
+            set: { if !$0 { activeAlert = nil } }
+        )
+    }
+
+    private func alertTitle(_ alert: StorageSettingsAlert) -> String {
+        switch alert {
+        case .destructive(.clearOffline):
+            localization.text("settings.storage.offline.clear")
+        case .destructive(.deleteSessions):
+            localization.text("settings.storage.agent.deleteAll")
+        case let .notice(notice):
+            notice.title
+        }
+    }
+
+    private func alertMessage(_ alert: StorageSettingsAlert) -> String {
+        switch alert {
+        case .destructive(.clearOffline):
+            localization.text("settings.storage.offline.clear.confirm")
+        case .destructive(.deleteSessions):
+            localization.text("settings.storage.agent.deleteAll.confirm")
+        case let .notice(notice):
+            notice.message
+        }
+    }
+
+    private func perform(_ action: StorageSettingsDestructiveAction) {
+        switch action {
+        case .clearOffline:
+            deletingOfflineStorage = true
+            Task {
+                do {
+                    try await viewModel.clearOfflineStorage()
+                    presentNotice(
+                        title: localization.text("settings.storage.offline.clear"),
+                        message: localization.text("settings.storage.offline.clear.done")
+                    )
+                } catch {
+                    presentNotice(
+                        title: localization.text("settings.agent.action.error"),
+                        message: localization.text("settings.storage.offline.clear.error")
+                    )
+                }
+                deletingOfflineStorage = false
             }
-            deletingSessions = false
+        case .deleteSessions:
+            deletingSessions = true
+            Task {
+                do {
+                    try await runtime.deleteAll()
+                    presentNotice(
+                        title: localization.text("settings.storage.agent.deleteAll"),
+                        message: localization.text("settings.storage.agent.deleteAll.done")
+                    )
+                } catch {
+                    presentNotice(
+                        title: localization.text("settings.agent.action.error"),
+                        message: localization.text("settings.storage.agent.deleteAll.error")
+                    )
+                }
+                deletingSessions = false
+            }
+        }
+    }
+
+    private func presentNotice(title: String, message: String) {
+        Task { @MainActor in
+            await Task.yield()
+            activeAlert = .notice(SettingsNotice(title: title, message: message))
         }
     }
 }
@@ -913,10 +1015,18 @@ private enum AgentSettingsDestructiveAction: String, Identifiable {
     var id: String { rawValue }
 }
 
-private struct AgentSettingsNotice: Identifiable {
-    let id = UUID()
-    let title: String
-    let message: String
+private enum AgentSettingsAlert: Identifiable {
+    case customHost(String)
+    case destructive(AgentSettingsDestructiveAction)
+    case notice(SettingsNotice)
+
+    var id: String {
+        switch self {
+        case .customHost: "custom-host"
+        case let .destructive(action): "destructive-\(action.rawValue)"
+        case let .notice(notice): "notice-\(notice.id.uuidString)"
+        }
+    }
 }
 
 /// Configures Agent provider wire format, model, endpoint, and API key.
@@ -933,10 +1043,7 @@ struct AgentSettingsView: View {
     @State private var model = ""
     @State private var baseURL = ""
     @State private var apiKey = ""
-    @State private var pendingCustomEndpoint = false
-    @State private var pendingCustomHost = ""
-    @State private var pendingDestructiveAction: AgentSettingsDestructiveAction?
-    @State private var notice: AgentSettingsNotice?
+    @State private var activeAlert: AgentSettingsAlert?
     @State private var deletingSessions = false
     @State private var apiKeyRepresentsStoredValue = false
     @FocusState private var apiKeyFocused: Bool
@@ -965,7 +1072,7 @@ struct AgentSettingsView: View {
                     AgentSessionHistoryView()
                 }
                 Button(role: .destructive) {
-                    pendingDestructiveAction = .deleteSessions
+                    activeAlert = .destructive(.deleteSessions)
                 } label: {
                     HStack {
                         Label(
@@ -1098,7 +1205,7 @@ struct AgentSettingsView: View {
                 .accessibilityIdentifier("agentSettingsApplyButton")
 
                 Button(role: .destructive) {
-                    pendingDestructiveAction = .clearToken
+                    activeAlert = .destructive(.clearToken)
                 } label: {
                     HStack {
                         Label(
@@ -1113,7 +1220,7 @@ struct AgentSettingsView: View {
                 .accessibilityIdentifier("agentSettingsClearButton")
 
                 Button(role: .destructive) {
-                    pendingDestructiveAction = .reset
+                    activeAlert = .destructive(.reset)
                 } label: {
                     HStack {
                         Label(
@@ -1147,28 +1254,69 @@ struct AgentSettingsView: View {
             apiKeyRepresentsStoredValue = false
         }
         .alert(
-            localization.text("settings.agent.confirmCustomHost"),
-            isPresented: $pendingCustomEndpoint
-        ) {
-            Button(localization.text("common.cancel"), role: .cancel) {}
-            Button(localization.text("settings.agent.confirmCustomHost")) {
-                applySettings(privacyConfirmed: true)
+            activeAlert.map(alertTitle) ?? "",
+            isPresented: alertIsPresented,
+            presenting: activeAlert
+        ) { alert in
+            switch alert {
+            case .customHost:
+                Button(localization.text("common.cancel"), role: .cancel) {}
+                    .accessibilityIdentifier("agentSettingsAlertCancelButton")
+                Button(localization.text("settings.agent.confirmCustomHost")) {
+                    applySettings(privacyConfirmed: true)
+                }
+                .accessibilityIdentifier("agentSettingsCustomHostConfirmButton")
+            case let .destructive(action):
+                Button(localization.text("common.cancel"), role: .cancel) {}
+                    .accessibilityIdentifier("agentSettingsAlertCancelButton")
+                Button(localization.text("common.confirm"), role: .destructive) {
+                    perform(action)
+                }
+                .accessibilityIdentifier("agentSettingsConfirm-\(action.rawValue)")
+            case .notice:
+                Button(localization.text("common.confirm")) {}
+                    .accessibilityIdentifier("agentSettingsNoticeDismissButton")
             }
         } message: {
-            Text(
-                "\(localization.text("settings.agent.customHostPrivacy"))\n\n"
-                + localization.text("settings.agent.customHost", pendingCustomHost)
-            )
+            Text(alertMessage($0))
         }
-        .alert(item: $pendingDestructiveAction) { action in
-            destructiveAlert(for: action)
+    }
+
+    private var alertIsPresented: Binding<Bool> {
+        Binding(
+            get: { activeAlert != nil },
+            set: { if !$0 { activeAlert = nil } }
+        )
+    }
+
+    private func alertTitle(_ alert: AgentSettingsAlert) -> String {
+        switch alert {
+        case .customHost:
+            localization.text("settings.agent.confirmCustomHost")
+        case .destructive(.clearToken):
+            localization.text("settings.agent.clearToken")
+        case .destructive(.reset):
+            localization.text("settings.agent.reset")
+        case .destructive(.deleteSessions):
+            localization.text("settings.storage.agent.deleteAll")
+        case let .notice(notice):
+            notice.title
         }
-        .alert(item: $notice) { notice in
-            Alert(
-                title: Text(notice.title),
-                message: Text(notice.message),
-                dismissButton: .default(Text(localization.text("common.confirm")))
-            )
+    }
+
+    private func alertMessage(_ alert: AgentSettingsAlert) -> String {
+        switch alert {
+        case let .customHost(host):
+            "\(localization.text("settings.agent.customHostPrivacy"))\n\n"
+                + localization.text("settings.agent.customHost", host)
+        case .destructive(.clearToken):
+            localization.text("settings.agent.clearToken.confirm")
+        case .destructive(.reset):
+            localization.text("settings.agent.reset.confirm")
+        case .destructive(.deleteSessions):
+            localization.text("settings.storage.agent.deleteAll.confirm")
+        case let .notice(notice):
+            notice.message
         }
     }
 
@@ -1187,18 +1335,17 @@ struct AgentSettingsView: View {
         ) {
         case .applied:
             loadPersistedValues()
-            notice = AgentSettingsNotice(
+            presentNotice(
                 title: localization.text("common.apply"),
                 message: localization.text("settings.agent.applied")
             )
         case .invalid:
-            notice = AgentSettingsNotice(
+            presentNotice(
                 title: localization.text("settings.agent.action.error"),
                 message: localization.text("agent.state.configurationRequired")
             )
         case let .privacyConfirmationRequired(host):
-            pendingCustomHost = host
-            pendingCustomEndpoint = true
+            activeAlert = .customHost(host)
         }
     }
 
@@ -1219,39 +1366,13 @@ struct AgentSettingsView: View {
         }
     }
 
-    private func destructiveAlert(
-        for action: AgentSettingsDestructiveAction
-    ) -> Alert {
-        let titleKey: String
-        let messageKey: String
-        switch action {
-        case .clearToken:
-            titleKey = "settings.agent.clearToken"
-            messageKey = "settings.agent.clearToken.confirm"
-        case .reset:
-            titleKey = "settings.agent.reset"
-            messageKey = "settings.agent.reset.confirm"
-        case .deleteSessions:
-            titleKey = "settings.storage.agent.deleteAll"
-            messageKey = "settings.storage.agent.deleteAll.confirm"
-        }
-        return Alert(
-            title: Text(localization.text(titleKey)),
-            message: Text(localization.text(messageKey)),
-            primaryButton: .destructive(Text(localization.text("common.confirm"))) {
-                perform(action)
-            },
-            secondaryButton: .cancel()
-        )
-    }
-
     private func perform(_ action: AgentSettingsDestructiveAction) {
         switch action {
         case .clearToken:
             let succeeded = store.clearAPIKey()
             apiKey = ""
             apiKeyRepresentsStoredValue = false
-            notice = AgentSettingsNotice(
+            presentNotice(
                 title: localization.text(
                     succeeded ? "settings.agent.clearToken" : "settings.agent.action.error"
                 ),
@@ -1262,7 +1383,7 @@ struct AgentSettingsView: View {
         case .reset:
             store.resetToDefaults()
             loadPersistedValues()
-            notice = AgentSettingsNotice(
+            presentNotice(
                 title: localization.text("settings.agent.reset"),
                 message: localization.text("settings.agent.resetDone")
             )
@@ -1271,18 +1392,25 @@ struct AgentSettingsView: View {
             Task {
                 do {
                     try await runtime.deleteAll()
-                    notice = AgentSettingsNotice(
+                    presentNotice(
                         title: localization.text("settings.storage.agent.deleteAll"),
                         message: localization.text("settings.storage.agent.deleteAll.done")
                     )
                 } catch {
-                    notice = AgentSettingsNotice(
+                    presentNotice(
                         title: localization.text("settings.agent.action.error"),
                         message: localization.text("settings.storage.agent.deleteAll.error")
                     )
                 }
                 deletingSessions = false
             }
+        }
+    }
+
+    private func presentNotice(title: String, message: String) {
+        Task { @MainActor in
+            await Task.yield()
+            activeAlert = .notice(SettingsNotice(title: title, message: message))
         }
     }
 

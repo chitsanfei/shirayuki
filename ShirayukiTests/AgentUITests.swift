@@ -4,6 +4,19 @@ import XCTest
 
 @MainActor
 final class AgentUITests: XCTestCase {
+    func testAgentMessageMarkdownPreservesLineBreaksAndInlineFormatting() throws {
+        let attributed = try AgentMessageMarkdown.attributedString(
+            from: "first line\nsecond **bold** line"
+        )
+
+        XCTAssertEqual(String(attributed.characters), "first line\nsecond bold line")
+        XCTAssertTrue(
+            attributed.runs.contains {
+                $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true
+            }
+        )
+    }
+
     func testFloatingButtonPositionClampsInsideSafeArea() {
         let position = AgentUIState.shared.clamped(
             CGPoint(x: -100, y: 1_000),

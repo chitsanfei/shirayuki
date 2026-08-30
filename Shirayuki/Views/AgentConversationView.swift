@@ -5,6 +5,15 @@ import UIKit
 import AppKit
 #endif
 
+nonisolated enum AgentMessageMarkdown {
+    static func attributedString(from value: String) throws -> AttributedString {
+        try AttributedString(
+            markdown: value,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )
+    }
+}
+
 /// Codex-style conversation surface backed by the persistent AgentRuntime.
 struct AgentConversationView: View {
     @EnvironmentObject private var runtime: AgentRuntime
@@ -249,10 +258,7 @@ struct AgentConversationView: View {
 
     @ViewBuilder
     private func markdownText(_ value: String) -> some View {
-        if let attributed = try? AttributedString(
-            markdown: value,
-            options: .init(interpretedSyntax: .full)
-        ) {
+        if let attributed = try? AgentMessageMarkdown.attributedString(from: value) {
             Text(attributed)
                 .textSelection(.enabled)
                 .font(.body)

@@ -708,6 +708,24 @@ nonisolated private enum AppLocalizationCatalog {
             .english: "Delete Offline Comics",
             .japanese: "オフライン漫画を削除"
         ],
+        "settings.storage.offline.clear.confirm": [
+            .simplifiedChinese: "这会删除全部已下载的离线漫画和图片，确认继续？",
+            .traditionalChinese: "這會刪除全部已下載的離線漫畫與圖片，確認繼續？",
+            .english: "Delete all downloaded offline comics and images?",
+            .japanese: "ダウンロード済みのオフライン漫画と画像をすべて削除しますか？"
+        ],
+        "settings.storage.offline.clear.done": [
+            .simplifiedChinese: "离线漫画已清理",
+            .traditionalChinese: "離線漫畫已清理",
+            .english: "Offline comics deleted",
+            .japanese: "オフライン漫画を削除しました"
+        ],
+        "settings.storage.offline.clear.error": [
+            .simplifiedChinese: "无法清理离线漫画",
+            .traditionalChinese: "無法清理離線漫畫",
+            .english: "Could not delete offline comics",
+            .japanese: "オフライン漫画を削除できませんでした"
+        ],
         "settings.cache.clear": [
             .simplifiedChinese: "清理图片缓存",
             .traditionalChinese: "清除圖片快取",
