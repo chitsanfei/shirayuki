@@ -187,7 +187,8 @@ struct VerticalReader: View {
                                 offlineComicID: viewModel.comic.id,
                                 offlineChapterID: viewModel.currentChapter?.id,
                                 expectedOfflineImageCount: viewModel.images.count,
-                                forceOffline: viewModel.offlineOnly
+                                forceOffline: viewModel.offlineOnly,
+                                maximumPixelDimension: 4_096
                             )
                                 .aspectRatio(contentMode: .fit)
                                 .frame(maxWidth: .infinity)
@@ -307,7 +308,8 @@ struct HorizontalReader: View {
                     comicID: viewModel.comic.id,
                     chapterID: viewModel.currentChapter?.id,
                     expectedImageCount: viewModel.images.count,
-                    forceOffline: viewModel.offlineOnly
+                    forceOffline: viewModel.offlineOnly,
+                    maximumPixelDimension: 4_096
                 ) {
                     viewModel.toggleToolbar()
                 }
@@ -336,6 +338,7 @@ struct ZoomableComicImage: View {
     let chapterID: String?
     let expectedImageCount: Int
     let forceOffline: Bool
+    let maximumPixelDimension: Int
     let onSingleTap: () -> Void
     
     @State private var scale: CGFloat = 1.0
@@ -350,7 +353,8 @@ struct ZoomableComicImage: View {
                 offlineComicID: comicID,
                 offlineChapterID: chapterID,
                 expectedOfflineImageCount: expectedImageCount,
-                forceOffline: forceOffline
+                forceOffline: forceOffline,
+                maximumPixelDimension: maximumPixelDimension
             )
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -35,11 +35,15 @@ nonisolated enum AppImageQuality: String, CaseIterable, Identifiable, Codable, S
     }
 
     static var stored: AppImageQuality {
-        if let rawValue = UserDefaults.standard.string(forKey: storageKey),
+        stored(in: .standard)
+    }
+
+    static func stored(in defaults: UserDefaults) -> AppImageQuality {
+        if let rawValue = defaults.string(forKey: storageKey),
            let quality = AppImageQuality(rawValue: rawValue) {
             return quality
         }
-        return .original
+        return .high
     }
 }
 

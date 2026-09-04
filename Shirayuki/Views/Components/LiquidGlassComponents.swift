@@ -1,10 +1,5 @@
 import SwiftUI
-
-#if canImport(UIKit)
-import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
+import CoreGraphics
 
 // MARK: - Comic Cover Image
 /// Displays a comic cover using the shared async image pipeline.
@@ -16,7 +11,7 @@ struct ComicCoverImage: View {
         Rectangle()
             .fill(Color.clear)
             .overlay {
-                ComicAsyncImage(url: url)
+                ComicAsyncImage(url: url, maximumPixelDimension: 1_024)
                     .modifier(ComicImageScaling(contentMode: contentMode))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -32,12 +27,17 @@ struct ComicAsyncImage: View {
     let offlineChapterID: String?
     let expectedOfflineImageCount: Int?
     let forceOffline: Bool
-    @State private var imageData: Data?
+    let maximumPixelDimension: Int
+    @State private var image: CGImage?
     @State private var isLoading = false
     @State private var didFail = false
 
+    private var sourceKey: String {
+        "\(url ?? "empty")|\(AppImageQuality.stored.rawValue)|\(offlineComicID ?? "")|\(offlineChapterID ?? "")|\(expectedOfflineImageCount ?? 0)|\(forceOffline)"
+    }
+
     private var requestID: String {
-        "\(url ?? "empty")|\(AppImageQuality.stored.rawValue)|\(offlineComicID ?? "")|\(offlineChapterID ?? "")|\(expectedOfflineImageCount ?? 0)"
+        "\(sourceKey)|pixels:\(maximumPixelDimension)"
     }
 
     init(
@@ -45,49 +45,37 @@ struct ComicAsyncImage: View {
         offlineComicID: String? = nil,
         offlineChapterID: String? = nil,
         expectedOfflineImageCount: Int? = nil,
-        forceOffline: Bool = false
+        forceOffline: Bool = false,
+        maximumPixelDimension: Int
     ) {
         self.url = url
         self.offlineComicID = offlineComicID
         self.offlineChapterID = offlineChapterID
         self.expectedOfflineImageCount = expectedOfflineImageCount
         self.forceOffline = forceOffline
+        self.maximumPixelDimension = maximumPixelDimension
     }
     
     var body: some View {
         Group {
-            if let data = imageData {
-                #if canImport(UIKit)
-                if let uiImage = UIImage(data: data) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                } else {
-                    placeholder
-                }
-                #elseif canImport(AppKit)
-                if let nsImage = NSImage(data: data) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                } else {
-                    placeholder
-                }
-                #else
-                placeholder
-                #endif
+            if let image {
+                Image(decorative: image, scale: 1, orientation: .up)
+                    .resizable()
             } else {
                 placeholder
             }
         }
         .task(id: requestID) {
-            imageData = nil
+            image = nil
             didFail = false
-            guard let url = url else {
+            guard let url else {
                 isLoading = false
                 return
             }
             isLoading = true
+            let quality = AppImageQuality.stored
             do {
-                let quality = AppImageQuality.stored
+                let decodedImage: CGImage?
                 if (forceOffline || !AppReaderSettingsStore.shared.ignoresOfflineContent),
                    let comicID = offlineComicID,
                    let chapterID = offlineChapterID,
@@ -98,12 +86,24 @@ struct ComicAsyncImage: View {
                        quality: quality,
                        expectedImageCount: expectedOfflineImageCount
                    ) {
-                    imageData = localData
+                    decodedImage = await ImageLoader.shared.decodedImage(
+                        from: localData,
+                        sourceKey: sourceKey,
+                        maximumPixelDimension: maximumPixelDimension
+                    )
                 } else {
-                    imageData = try await ImageLoader.shared.loadImage(from: url, quality: quality)
+                    decodedImage = try await ImageLoader.shared.loadDecodedImage(
+                        from: url,
+                        quality: quality,
+                        maximumPixelDimension: maximumPixelDimension
+                    )
                 }
+                guard !Task.isCancelled else { return }
+                image = decodedImage
+                didFail = decodedImage == nil
             } catch {
-                imageData = nil
+                guard !Task.isCancelled else { return }
+                image = nil
                 didFail = true
             }
             isLoading = false
@@ -115,13 +115,13 @@ struct ComicAsyncImage: View {
                     .padding(10)
                     .background(.black.opacity(0.22), in: Circle())
                     .transition(.scale(scale: 0.72).combined(with: .opacity))
-            } else if didFail && imageData == nil {
+            } else if didFail && image == nil {
                 Image(systemName: "wifi.exclamationmark")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.secondary.opacity(0.7))
             }
         }
-        .animation(.interpolatingSpring(stiffness: 240, damping: 22), value: imageData != nil)
+        .animation(.interpolatingSpring(stiffness: 240, damping: 22), value: image != nil)
         .animation(.easeOut(duration: 0.18), value: isLoading)
     }
     

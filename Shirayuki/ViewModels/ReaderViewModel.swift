@@ -421,7 +421,7 @@ final class ReaderViewModel: ObservableViewModel {
         let urls = (start...end).map { images[$0].url }
         preloadTask?.cancel()
         preloadTask = Task(priority: .utility) {
-            await ImageLoader.shared.preload(urls: urls)
+            await ImageLoader.shared.preload(urls: urls, maximumPixelDimension: 4_096)
         }
     }
 

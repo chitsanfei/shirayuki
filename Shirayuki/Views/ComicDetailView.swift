@@ -290,7 +290,7 @@ struct ComicDetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {
                     if let avatarURL = comic.creator.avatar?.url {
-                        ComicAsyncImage(url: avatarURL)
+                        ComicAsyncImage(url: avatarURL, maximumPixelDimension: 256)
                             .frame(width: 52, height: 52)
                             .clipShape(Circle())
                     } else {
