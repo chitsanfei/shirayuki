@@ -12,6 +12,8 @@ final class HomeViewModel: ObservableViewModel {
     @Published var selectedMode: HomeDisplayMode = .latest
     @Published private(set) var lastLoadedPageIDs: [String] = []
     @Published private(set) var lastEvaluatedBlockedRevision: UInt64 = 0
+    /// Bumped per request so a refresh or mode switch discards any page response still in flight.
+    private var loadGeneration = 0
 
     var navigationTitle: String {
         selectedMode.displayName
@@ -25,21 +27,28 @@ final class HomeViewModel: ObservableViewModel {
         await loadComics(reset: true)
     }
 
+    /// Loads page 1 when resetting, otherwise the page after `currentPage`.
+    /// `currentPage` only advances once that page has loaded successfully.
     func loadComics(reset: Bool = false) async {
         if reset {
             currentPage = 1
             comics = []
         }
+        let page = reset ? 1 : currentPage + 1
 
+        loadGeneration += 1
+        let generation = loadGeneration
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            if generation == loadGeneration { isLoading = false }
+        }
 
         do {
             let result: ComicsList
             switch selectedMode {
             case .latest:
-                result = try await PicaAPIService.shared.fetchComics(payload: makePayload(page: currentPage))
+                result = try await PicaAPIService.shared.fetchComics(payload: makePayload(page: page))
             case .daily:
                 result = try await PicaAPIService.shared.fetchComicRank(type: .daily)
             case .weekly:
@@ -47,6 +56,7 @@ final class HomeViewModel: ObservableViewModel {
             case .monthly:
                 result = try await PicaAPIService.shared.fetchComicRank(type: .monthly)
             }
+            guard generation == loadGeneration else { return }
             if reset {
                 comics = result.docs
             } else {
@@ -56,6 +66,7 @@ final class HomeViewModel: ObservableViewModel {
             currentPage = result.page
             totalPages = result.pages
         } catch {
+            guard generation == loadGeneration else { return }
             handleError(error)
         }
     }
@@ -69,8 +80,12 @@ final class HomeViewModel: ObservableViewModel {
     func loadNextPage() async {
         guard !isLoading, currentPage < totalPages else { return }
         guard selectedMode == .latest else { return }
-        currentPage += 1
         await loadComics()
+    }
+
+    /// True when a later page failed while earlier results are still on screen.
+    var nextPageFailed: Bool {
+        errorMessage != nil && !isLoading && !comics.isEmpty
     }
 
     func visibleComics(for snapshot: BlockedWordSnapshot) -> [ComicSummary] {
@@ -78,7 +93,7 @@ final class HomeViewModel: ObservableViewModel {
     }
 
     func shouldLoadFilteredPage(for snapshot: BlockedWordSnapshot) -> Bool {
-        guard !isLoading, selectedMode == .latest, currentPage < totalPages else { return false }
+        guard !isLoading, errorMessage == nil, selectedMode == .latest, currentPage < totalPages else { return false }
         let latestIDs = Set(lastLoadedPageIDs)
         let latest = comics.filter { latestIDs.contains($0.id) }
         return !latest.isEmpty && PicaAgentAdapters.visibleComics(latest, snapshot: snapshot).isEmpty

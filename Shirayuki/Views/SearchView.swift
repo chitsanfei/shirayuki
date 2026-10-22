@@ -208,7 +208,9 @@ struct SearchView: View {
                 .padding(.horizontal, 16)
             }
 
-            if viewModel.shouldLoadFilteredPage(for: snapshot) {
+            if viewModel.nextPageFailed, !visibleComics.isEmpty, let errorMessage = viewModel.errorMessage {
+                nextPageErrorState(message: errorMessage)
+            } else if viewModel.shouldLoadFilteredPage(for: snapshot) {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .onAppear { Task { await viewModel.loadNextPage() } }
@@ -233,6 +235,21 @@ struct SearchView: View {
         .padding(.horizontal, 16)
     }
     
+    private func nextPageErrorState(message: String) -> some View {
+        VStack(spacing: 8) {
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button(localization.text("common.reload")) {
+                Task { await viewModel.loadNextPage() }
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+    }
+
     private func contentErrorState(message: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.magnifyingglass")

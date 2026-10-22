@@ -158,7 +158,9 @@ struct HomeView: View {
                 .padding(.horizontal, 16)
             }
 
-            if viewModel.shouldLoadFilteredPage(for: snapshot) {
+            if viewModel.nextPageFailed, !visibleComics.isEmpty, let errorMessage = viewModel.errorMessage {
+                nextPageErrorState(message: errorMessage)
+            } else if viewModel.shouldLoadFilteredPage(for: snapshot) {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .onAppear { Task { await viewModel.loadNextPage() } }
@@ -180,6 +182,21 @@ struct HomeView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 220)
+        .padding(.horizontal, 16)
+    }
+
+    private func nextPageErrorState(message: String) -> some View {
+        VStack(spacing: 8) {
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button(localization.text("common.reload")) {
+                Task { await viewModel.loadNextPage() }
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
     }
 

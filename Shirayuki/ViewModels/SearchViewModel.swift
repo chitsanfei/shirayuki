@@ -15,6 +15,8 @@ final class SearchViewModel: ObservableViewModel {
     @Published var sortAscending = false
     @Published private(set) var lastLoadedPageIDs: [String] = []
     @Published private(set) var lastEvaluatedBlockedRevision: UInt64 = 0
+    /// Bumped per request so a new search discards any page response still in flight.
+    private var loadGeneration = 0
     
     var searchHistory: [String] {
         UserDefaults.standard.stringArray(forKey: "search_history") ?? []
@@ -40,6 +42,8 @@ final class SearchViewModel: ObservableViewModel {
         Self.resolvedSortMode(sortMode: sortMode, ascending: sortAscending)
     }
     
+    /// Loads page 1 when resetting, otherwise the page after `currentPage`.
+    /// `currentPage` only advances once that page has loaded successfully.
     func search(reset: Bool = false) async {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else {
@@ -52,16 +56,22 @@ final class SearchViewModel: ObservableViewModel {
             results = []
             saveSearchHistory(trimmedQuery)
         }
+        let page = reset ? 1 : currentPage + 1
         
+        loadGeneration += 1
+        let generation = loadGeneration
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            if generation == loadGeneration { isLoading = false }
+        }
         do {
             let result = try await PicaAPIService.shared.searchComics(
                 keyword: trimmedQuery,
-                page: currentPage,
+                page: page,
                 sort: requestSortMode
             )
+            guard generation == loadGeneration else { return }
             if reset {
                 results = result.docs
             } else {
@@ -71,15 +81,19 @@ final class SearchViewModel: ObservableViewModel {
             currentPage = result.page
             totalPages = result.pages
         } catch {
-            results = []
+            guard generation == loadGeneration else { return }
             handleError(error)
         }
     }
     
     func loadNextPage() async {
         guard !isLoading, currentPage < totalPages else { return }
-        currentPage += 1
         await search()
+    }
+
+    /// True when a later page failed while earlier results are still on screen.
+    var nextPageFailed: Bool {
+        errorMessage != nil && !isLoading && !results.isEmpty
     }
 
     func visibleComics(for snapshot: BlockedWordSnapshot) -> [ComicSummary] {
@@ -87,7 +101,7 @@ final class SearchViewModel: ObservableViewModel {
     }
 
     func shouldLoadFilteredPage(for snapshot: BlockedWordSnapshot) -> Bool {
-        guard !isLoading, currentPage < totalPages else { return false }
+        guard !isLoading, errorMessage == nil, currentPage < totalPages else { return false }
         let latestIDs = Set(lastLoadedPageIDs)
         let latest = results.filter { latestIDs.contains($0.id) }
         return !latest.isEmpty && PicaAgentAdapters.visibleComics(latest, snapshot: snapshot).isEmpty
@@ -115,6 +129,8 @@ final class SearchViewModel: ObservableViewModel {
     }
     
     func clearQuery() {
+        loadGeneration += 1
+        isLoading = false
         query = ""
         results = []
         errorMessage = nil
