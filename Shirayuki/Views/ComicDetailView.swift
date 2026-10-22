@@ -234,15 +234,13 @@ struct ComicDetailView: View {
                     .lineLimit(4)
                 
                 if let author = comic.author, !author.isEmpty {
-                    Label(author, systemImage: "person.fill")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.accentColor)
+                    creatorLink(author, systemImage: "person.fill", source: .author(author))
+                        .accessibilityIdentifier("comicDetailAuthorLink")
                 }
                 
                 if !comic.chineseTeam.isEmpty {
-                    Label(comic.chineseTeam, systemImage: "character.book.closed.fill")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.accentColor)
+                    creatorLink(comic.chineseTeam, systemImage: "character.book.closed.fill", source: .chineseTeam(comic.chineseTeam))
+                        .accessibilityIdentifier("comicDetailChineseTeamLink")
                 }
                 
                 HStack(spacing: 14) {
@@ -260,6 +258,19 @@ struct ComicDetailView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
+    }
+    
+    private func creatorLink(_ name: String, systemImage: String, source: ComicsBrowserSource) -> some View {
+        NavigationLink {
+            ComicsBrowserView(source: source)
+        } label: {
+            Label(name, systemImage: systemImage)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+                .multilineTextAlignment(.leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
     
     private func quickStatsSection(comic: ComicDetail) -> some View {

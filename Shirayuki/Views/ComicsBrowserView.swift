@@ -4,12 +4,18 @@ import SwiftUI
 /// Data source represented by the shared paginated comic browser.
 enum ComicsBrowserSource: Hashable, Identifiable, Sendable {
     case category(String)
+    case author(String)
+    case chineseTeam(String)
     case favorites
     
     var id: String {
         switch self {
         case .category(let name):
             return "category:\(name)"
+        case .author(let name):
+            return "author:\(name)"
+        case .chineseTeam(let name):
+            return "chineseTeam:\(name)"
         case .favorites:
             return "favorites"
         }
@@ -17,7 +23,7 @@ enum ComicsBrowserSource: Hashable, Identifiable, Sendable {
     
     var title: String {
         switch self {
-        case .category(let name):
+        case .category(let name), .author(let name), .chineseTeam(let name):
             return name
         case .favorites:
             return AppLocalization.text("browser.favorites.title")
@@ -26,7 +32,7 @@ enum ComicsBrowserSource: Hashable, Identifiable, Sendable {
     
     var emptyTitle: String {
         switch self {
-        case .category:
+        case .category, .author, .chineseTeam:
             return AppLocalization.text("browser.empty.comics")
         case .favorites:
             return AppLocalization.text("browser.empty.favorites")
@@ -37,8 +43,20 @@ enum ComicsBrowserSource: Hashable, Identifiable, Sendable {
         switch self {
         case .category(let name):
             return AppLocalization.text("browser.empty.category.subtitle", name)
+        case .author(let name), .chineseTeam(let name):
+            return AppLocalization.text("browser.empty.creator.subtitle", name)
         case .favorites:
             return AppLocalization.text("browser.empty.favorites.subtitle")
+        }
+    }
+
+    /// Favorites only honor date ordering; comic-list sources accept every sort code.
+    var supportedSorts: [ComicSortType] {
+        switch self {
+        case .category, .author, .chineseTeam:
+            return ComicSortType.allCases
+        case .favorites:
+            return [.dd, .da]
         }
     }
 }
@@ -53,41 +71,36 @@ final class ComicsBrowserViewModel: ObservableViewModel {
     @Published var totalPages = 1
     @Published private(set) var lastLoadedPageIDs: [String] = []
     @Published private(set) var lastEvaluatedBlockedRevision: UInt64 = 0
+    @Published private(set) var sort: ComicSortType = .dd
     
     let source: ComicsBrowserSource
+    /// Bumped per request so a refresh discards any page response still in flight.
+    private var loadGeneration = 0
     
     init(source: ComicsBrowserSource) {
         self.source = source
     }
     
+    /// Loads page 1 when resetting, otherwise the page after `currentPage`.
+    /// `currentPage` only advances once that page has loaded successfully.
     func load(reset: Bool = false) async {
         if reset {
             currentPage = 1
             comics = []
         }
+        let page = reset ? 1 : currentPage + 1
         
+        loadGeneration += 1
+        let generation = loadGeneration
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            if generation == loadGeneration { isLoading = false }
+        }
         
         do {
-            let result: ComicsList
-            switch source {
-            case .category(let category):
-                result = try await PicaAPIService.shared.fetchComics(
-                    payload: ComicsPayload(
-                        page: currentPage,
-                        c: category,
-                        s: .dd,
-                        t: nil,
-                        a: nil,
-                        ct: nil,
-                        ca: nil
-                    )
-                )
-            case .favorites:
-                result = try await PicaAPIService.shared.fetchFavoriteComics(page: currentPage, sort: .dd)
-            }
+            let result = try await fetch(page: page)
+            guard generation == loadGeneration else { return }
             
             if reset {
                 comics = result.docs
@@ -99,14 +112,46 @@ final class ComicsBrowserViewModel: ObservableViewModel {
             currentPage = result.page
             totalPages = result.pages
         } catch {
+            guard generation == loadGeneration else { return }
             handleError(error)
         }
     }
 
+    /// Switches the server-side ordering and reloads from page 1.
+    func setSort(_ newSort: ComicSortType) async {
+        guard newSort != sort, source.supportedSorts.contains(newSort) else { return }
+        sort = newSort
+        await load(reset: true)
+    }
+
     func loadNextPage() async {
         guard !isLoading, currentPage < totalPages else { return }
-        currentPage += 1
         await load()
+    }
+
+    /// True when a later page failed while earlier results are still on screen.
+    var nextPageFailed: Bool {
+        errorMessage != nil && !isLoading && !comics.isEmpty
+    }
+
+    private func fetch(page: Int) async throws -> ComicsList {
+        let api = PicaAPIService.shared
+        switch source {
+        case .category(let category):
+            return try await api.fetchComics(
+                payload: ComicsPayload(page: page, c: category, s: sort, t: nil, a: nil, ct: nil, ca: nil)
+            )
+        case .author(let author):
+            return try await api.fetchComics(
+                payload: ComicsPayload(page: page, c: nil, s: sort, t: nil, a: author, ct: nil, ca: nil)
+            )
+        case .chineseTeam(let team):
+            return try await api.fetchComics(
+                payload: ComicsPayload(page: page, c: nil, s: sort, t: nil, a: nil, ct: team, ca: nil)
+            )
+        case .favorites:
+            return try await api.fetchFavoriteComics(page: page, sort: sort)
+        }
     }
 
     func visibleComics(for snapshot: BlockedWordSnapshot) -> [ComicSummary] {
@@ -114,7 +159,7 @@ final class ComicsBrowserViewModel: ObservableViewModel {
     }
 
     func shouldLoadFilteredPage(for snapshot: BlockedWordSnapshot) -> Bool {
-        guard !isLoading, currentPage < totalPages else { return false }
+        guard !isLoading, errorMessage == nil, currentPage < totalPages else { return false }
         let latestIDs = Set(lastLoadedPageIDs)
         let latest = comics.filter { latestIDs.contains($0.id) }
         return !latest.isEmpty && PicaAgentAdapters.visibleComics(latest, snapshot: snapshot).isEmpty
@@ -129,7 +174,7 @@ final class ComicsBrowserViewModel: ObservableViewModel {
     }
 }
 
-/// Shared list screen for categories and account favorites.
+/// Shared list screen for categories, creators, and account favorites.
 struct ComicsBrowserView: View {
     let source: ComicsBrowserSource
 
@@ -169,7 +214,9 @@ struct ComicsBrowserView: View {
                     }
                 }
 
-                if viewModel.shouldLoadFilteredPage(for: blockedWords.currentSnapshot) {
+                if viewModel.nextPageFailed, !visibleComics.isEmpty, let errorMessage = viewModel.errorMessage {
+                    nextPageErrorState(message: errorMessage)
+                } else if viewModel.shouldLoadFilteredPage(for: blockedWords.currentSnapshot) {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                         .onAppear { Task { await viewModel.loadNextPage() } }
@@ -183,6 +230,11 @@ struct ComicsBrowserView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                sortMenu
+            }
+        }
         .navigationDestination(item: $selectedComicId) { comicId in
             ComicDetailView(comicId: comicId)
         }
@@ -215,6 +267,8 @@ struct ComicsBrowserView: View {
     private func publishAgentPageContent() {
         let sourceName = switch source {
         case let .category(name): "category.\(name)"
+        case let .author(name): "author.\(name)"
+        case let .chineseTeam(name): "chineseTeam.\(name)"
         case .favorites: "favorites"
         }
         agentPageContent.publish(
@@ -226,6 +280,26 @@ struct ComicsBrowserView: View {
             ),
             ownerID: pageContentOwnerID
         )
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker(
+                localization.text("search.filter.sort"),
+                selection: Binding(
+                    get: { viewModel.sort },
+                    set: { newSort in Task { await viewModel.setSort(newSort) } }
+                )
+            ) {
+                ForEach(source.supportedSorts) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+        }
+        .accessibilityLabel(localization.text("search.filter.sort"))
+        .accessibilityIdentifier("browserSortMenu")
     }
 
     private var visibleComics: [ComicSummary] {
@@ -247,6 +321,20 @@ struct ComicsBrowserView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 240)
+    }
+
+    private func nextPageErrorState(message: String) -> some View {
+        VStack(spacing: 8) {
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button(localization.text("common.reload")) {
+                Task { await viewModel.loadNextPage() }
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func contentErrorState(message: String) -> some View {

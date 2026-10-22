@@ -12,6 +12,18 @@ final class RoutingAndSettingsTests: XCTestCase {
         XCTAssertEqual(source.emptySubtitle, "恋爱 分类里还没有可显示的内容")
     }
 
+    func testCreatorSourcesDeriveIdentifiersAndMessages() {
+        let author = ComicsBrowserSource.author("MotherEmperor")
+        let team = ComicsBrowserSource.chineseTeam("漢化組")
+
+        XCTAssertEqual(author.id, "author:MotherEmperor")
+        XCTAssertEqual(team.id, "chineseTeam:漢化組")
+        XCTAssertNotEqual(author, ComicsBrowserSource.chineseTeam("MotherEmperor"))
+        XCTAssertEqual(author.title, "MotherEmperor")
+        XCTAssertEqual(team.emptyTitle, "暂无漫画")
+        XCTAssertEqual(team.emptySubtitle, "漢化組 还没有可显示的作品")
+    }
+
     func testOfficialRouteUsesReadableName() {
         XCTAssertEqual(AppProxyRule.official.displayName, "Picacomic 官方")
     }

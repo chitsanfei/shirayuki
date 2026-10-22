@@ -378,6 +378,12 @@ nonisolated private enum AppLocalizationCatalog {
             .english: "There is nothing visible in %@ yet.",
             .japanese: "%@ にはまだ表示できる作品がありません。"
         ],
+        "browser.empty.creator.subtitle": [
+            .simplifiedChinese: "%@ 还没有可显示的作品",
+            .traditionalChinese: "%@ 還沒有可顯示的作品",
+            .english: "There is nothing visible from %@ yet.",
+            .japanese: "%@ の作品はまだ表示できません。"
+        ],
         "browser.empty.favorites.subtitle": [
             .simplifiedChinese: "收藏漫画后会在这里完整显示",
             .traditionalChinese: "收藏漫畫後會在這裡完整顯示",
