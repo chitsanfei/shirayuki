@@ -89,6 +89,68 @@ final class ReaderViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.scrollTargetPage)
     }
 
+    func testScrollTrackingCannotOverrideSliderScrub() throws {
+        let comic = try makeComic(id: "scrub-comic")
+        let chapter = try makeChapter(uid: "uid-sc", id: "chapter-sc", title: "第1话", order: 1)
+        let images = try (1...10).map { try makeImage(uid: "p\($0)", path: "/c/\($0).jpg") }
+
+        let viewModel = ReaderViewModel(comic: comic, initialChapters: [chapter])
+        viewModel.chapters = [chapter]
+        viewModel.images = images
+
+        viewModel.beginPageScrub()
+        viewModel.seekToPage(7)
+        // Intermediate frames from the jump report other pages mid-flight.
+        viewModel.applyUserScrollPage(4)
+        XCTAssertEqual(viewModel.currentPageIndex, 7)
+
+        viewModel.endPageScrub()
+        viewModel.applyUserScrollPage(5)
+        XCTAssertEqual(viewModel.currentPageIndex, 7)
+    }
+
+    func testMenuTapTogglesImmediatelyAndDoubleTapRestoresIt() throws {
+        let comic = try makeComic(id: "tap-comic")
+        let viewModel = ReaderViewModel(comic: comic, initialChapters: [])
+        viewModel.isMenuLocked = false
+        viewModel.showToolbar = false
+        let start = Date()
+
+        viewModel.handleMenuTap(at: start)
+        XCTAssertTrue(viewModel.showToolbar)
+
+        // Second tap of a double tap is ignored, then the zoom undoes the first.
+        viewModel.handleMenuTap(at: start.addingTimeInterval(0.15))
+        XCTAssertTrue(viewModel.showToolbar)
+        viewModel.undoMenuTapForDoubleTap(at: start.addingTimeInterval(0.2))
+        XCTAssertFalse(viewModel.showToolbar)
+
+        // A later, separate tap toggles normally.
+        viewModel.handleMenuTap(at: start.addingTimeInterval(1))
+        XCTAssertTrue(viewModel.showToolbar)
+    }
+
+    func testPendingResumeScrollIsNotOverriddenByInitialLayout() throws {
+        let comic = try makeComic(id: "resume-comic")
+        let chapter = try makeChapter(uid: "uid-r", id: "chapter-r", title: "第1话", order: 1)
+        let images = try (1...10).map { try makeImage(uid: "p\($0)", path: "/c/\($0).jpg") }
+
+        let viewModel = ReaderViewModel(comic: comic, initialChapters: [chapter])
+        viewModel.chapters = [chapter]
+        viewModel.images = images
+        // Mirrors loading a chapter at a saved page.
+        viewModel.currentPageIndex = 6
+        viewModel.scrollTargetPage = 6
+
+        // The first layout pass reports the top of the chapter before the jump.
+        viewModel.applyUserScrollPage(0)
+        XCTAssertEqual(viewModel.currentPageIndex, 6)
+
+        viewModel.consumeScrollTargetPage()
+        viewModel.applyUserScrollPage(1)
+        XCTAssertEqual(viewModel.currentPageIndex, 6)
+    }
+
     func testConsumeScrollTargetPageClearsPendingTarget() throws {
         let comic = try makeComic(id: "consume-comic")
         let chapter = try makeChapter(uid: "uid-c", id: "chapter-c", title: "第1话", order: 1)

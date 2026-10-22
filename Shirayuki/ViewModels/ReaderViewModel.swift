@@ -37,9 +37,22 @@ final class ReaderViewModel: ObservableViewModel {
         }
     }
 
+    private static let doubleTapWindow: TimeInterval = 0.35
+    private var lastMenuTapAt: Date?
+    private var menuTapToggledToolbar = false
+
+    /// True while the user drags the page slider; scroll tracking must not fight it.
+    private(set) var isScrubbingPages = false
+    /// Scroll-driven page updates are ignored until a programmatic scroll settles.
+    private var scrollTrackingSuppressedUntil: Date = .distantPast
+
     /// Applies a user-driven page change without scheduling another programmatic scroll.
     func applyUserScrollPage(_ index: Int) {
         guard !images.isEmpty else { return }
+        // While a programmatic scroll is pending (e.g. resuming at a saved page),
+        // the first layout still reports the top of the chapter; ignore it.
+        guard scrollTargetPage == nil else { return }
+        guard !isScrubbingPages, Date() >= scrollTrackingSuppressedUntil else { return }
         let clamped = min(max(index, 0), images.count - 1)
         if clamped != currentPageIndex {
             currentPageIndex = clamped
@@ -370,9 +383,25 @@ final class ReaderViewModel: ObservableViewModel {
         updateCurrentPage(to: index)
     }
 
+    func beginPageScrub() {
+        isScrubbingPages = true
+    }
+
+    func endPageScrub() {
+        isScrubbingPages = false
+        suppressScrollTracking()
+    }
+
     /// Clears the pending programmatic scroll after the view consumes it.
     func consumeScrollTargetPage() {
         scrollTargetPage = nil
+        suppressScrollTracking()
+    }
+
+    /// Lets an in-flight programmatic scroll finish before visible-page tracking
+    /// resumes, so intermediate frames cannot overwrite the requested page.
+    private func suppressScrollTracking() {
+        scrollTrackingSuppressedUntil = Date().addingTimeInterval(0.4)
     }
     
     func toggleToolbar() {
@@ -382,6 +411,29 @@ final class ReaderViewModel: ObservableViewModel {
         }
     }
     
+    /// Toggles the toolbar for a single tap without waiting for a possible
+    /// double tap, so the menu responds immediately.
+    func handleMenuTap(at now: Date = Date()) {
+        // The second tap of a double tap also arrives here; the first already acted.
+        if let lastMenuTapAt, now.timeIntervalSince(lastMenuTapAt) < Self.doubleTapWindow {
+            return
+        }
+        lastMenuTapAt = now
+        let wasShowing = showToolbar
+        toggleToolbar()
+        menuTapToggledToolbar = showToolbar != wasShowing
+    }
+
+    /// Reverts the toggle made by the first tap of a double tap, so zooming
+    /// leaves the menu in the state it was in before.
+    func undoMenuTapForDoubleTap(at now: Date = Date()) {
+        defer { menuTapToggledToolbar = false }
+        guard menuTapToggledToolbar,
+              let lastMenuTapAt,
+              now.timeIntervalSince(lastMenuTapAt) < Self.doubleTapWindow else { return }
+        toggleToolbar()
+    }
+
     func hideToolbar() {
         guard !isMenuLocked else { return }
         withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {

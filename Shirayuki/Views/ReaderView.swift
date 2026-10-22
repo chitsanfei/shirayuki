@@ -175,6 +175,8 @@ struct VerticalReader: View {
     @ObservedObject var viewModel: ReaderViewModel
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
+    @State private var scrollMotion = ReaderScrollMotionTracker()
+    @State private var viewportSize: CGSize = .zero
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -211,13 +213,22 @@ struct VerticalReader: View {
                     }
                 }
                 .coordinateSpace(name: "readerVerticalScroll")
+                .onAppear { viewportSize = geometry.size }
+                .onChange(of: geometry.size) { _, size in viewportSize = size }
                 .onPreferenceChange(ReaderPageFramePreferenceKey.self) { frames in
+                    scrollMotion.record(frames)
                     updateCurrentPage(using: frames, viewportHeight: geometry.size.height)
                 }
                 .onChange(of: viewModel.scrollTargetPage) { _, target in
                     guard let target else { return }
-                    withAnimation(.easeInOut(duration: 0.22)) {
+                    // Jump directly while scrubbing; stacked animations through a
+                    // lazy stack land on estimated offsets and look jittery.
+                    if viewModel.isScrubbingPages {
                         proxy.scrollTo(target, anchor: .top)
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            proxy.scrollTo(target, anchor: .top)
+                        }
                     }
                     viewModel.consumeScrollTargetPage()
                 }
@@ -240,10 +251,22 @@ struct VerticalReader: View {
         .simultaneousGesture(
             TapGesture(count: 2)
                 .onEnded {
+                    viewModel.undoMenuTapForDoubleTap()
                     withAnimation(.spring(response: 0.3)) {
                         scale = scale > 1.0 ? 1.0 : 2.0
                     }
                     lastScale = scale
+                }
+        )
+        .simultaneousGesture(
+            // Not exclusive with the double tap: waiting for it to fail would
+            // delay every menu tap. The double tap undoes this toggle instead.
+            SpatialTapGesture()
+                .onEnded { value in
+                    guard ReaderTapZone.togglesMenu(at: value.location, in: viewportSize) else { return }
+                    // A tap that stops a fling is not a request for the toolbar.
+                    guard !scrollMotion.wasMovingRecently else { return }
+                    viewModel.handleMenuTap()
                 }
         )
         .simultaneousGesture(
@@ -256,12 +279,6 @@ struct VerticalReader: View {
                         withAnimation { scale = 1.0 }
                     }
                     lastScale = scale
-                }
-        )
-        .simultaneousGesture(
-            TapGesture()
-                .onEnded {
-                    viewModel.toggleToolbar()
                 }
         )
         .simultaneousGesture(
@@ -289,6 +306,37 @@ struct VerticalReader: View {
     }
 }
 
+/// Only taps in the middle of the page toggle the reader menu; edge taps are
+/// ignored so stray touches while reading do not open it.
+private enum ReaderTapZone {
+    static func togglesMenu(at location: CGPoint, in size: CGSize) -> Bool {
+        guard size.width > 0, size.height > 0 else { return true }
+        let x = location.x / size.width
+        let y = location.y / size.height
+        return (0.2...0.8).contains(x) && (1.0 / 3.0...2.0 / 3.0).contains(y)
+    }
+}
+
+/// Remembers when the vertical reader content last moved. A reference type so
+/// per-frame updates do not invalidate the view.
+private final class ReaderScrollMotionTracker {
+    private var lastProbe: ReaderPageFrame?
+    private var lastMotion: Date = .distantPast
+
+    /// Covers the gap between the touch-down that stops a fling and the tap's touch-up.
+    var wasMovingRecently: Bool {
+        Date().timeIntervalSince(lastMotion) < 0.3
+    }
+
+    func record(_ frames: [ReaderPageFrame]) {
+        guard let probe = frames.min(by: { $0.index < $1.index }) else { return }
+        if let lastProbe, lastProbe.index != probe.index || lastProbe.frame.minY != probe.frame.minY {
+            lastMotion = Date()
+        }
+        lastProbe = probe
+    }
+}
+
 /// Horizontally paged reader driven by programmatic selection.
 struct HorizontalReader: View {
     @ObservedObject var viewModel: ReaderViewModel
@@ -311,7 +359,9 @@ struct HorizontalReader: View {
                     forceOffline: viewModel.offlineOnly,
                     maximumPixelDimension: 4_096
                 ) {
-                    viewModel.toggleToolbar()
+                    viewModel.handleMenuTap()
+                } onDoubleTap: {
+                    viewModel.undoMenuTapForDoubleTap()
                 }
                 .tag(index)
             }
@@ -320,6 +370,17 @@ struct HorizontalReader: View {
         .tabViewStyle(.page(indexDisplayMode: .never))
         #endif
         .ignoresSafeArea()
+        // Selection already follows currentPageIndex; clear the pending target
+        // so it does not block page tracking.
+        .onAppear {
+            if viewModel.scrollTargetPage != nil {
+                viewModel.consumeScrollTargetPage()
+            }
+        }
+        .onChange(of: viewModel.scrollTargetPage) { _, target in
+            guard target != nil else { return }
+            viewModel.consumeScrollTargetPage()
+        }
         .simultaneousGesture(
             DragGesture(minimumDistance: 8)
                 .onChanged { _ in
@@ -340,6 +401,7 @@ struct ZoomableComicImage: View {
     let forceOffline: Bool
     let maximumPixelDimension: Int
     let onSingleTap: () -> Void
+    let onDoubleTap: () -> Void
     
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
@@ -347,7 +409,7 @@ struct ZoomableComicImage: View {
     @State private var lastOffset: CGSize = .zero
     
     var body: some View {
-        GeometryReader { _ in
+        GeometryReader { geometry in
             ComicAsyncImage(
                 url: url,
                 offlineComicID: comicID,
@@ -392,6 +454,7 @@ struct ZoomableComicImage: View {
                 .simultaneousGesture(
                     TapGesture(count: 2)
                         .onEnded {
+                            onDoubleTap()
                             withAnimation(.spring(response: 0.3)) {
                                 if scale > 1.0 {
                                     scale = 1.0
@@ -405,8 +468,11 @@ struct ZoomableComicImage: View {
                         }
                 )
                 .simultaneousGesture(
-                    TapGesture()
-                        .onEnded(onSingleTap)
+                    SpatialTapGesture()
+                        .onEnded { value in
+                            guard ReaderTapZone.togglesMenu(at: value.location, in: geometry.size) else { return }
+                            onSingleTap()
+                        }
                 )
         }
     }
@@ -518,7 +584,14 @@ struct ReaderBottomToolbar: View {
                                     set: { viewModel.seekToPage(Int($0.rounded())) }
                                 ),
                                 in: 0...Double(viewModel.images.count - 1),
-                                step: 1
+                                step: 1,
+                                onEditingChanged: { isEditing in
+                                    if isEditing {
+                                        viewModel.beginPageScrub()
+                                    } else {
+                                        viewModel.endPageScrub()
+                                    }
+                                }
                             )
                             .tint(.white)
                         } else {
